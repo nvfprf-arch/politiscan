@@ -1,8 +1,12 @@
-# NEWS SOURCE: Google News RSS - validation phase
+# NEWS SOURCE: Google News RSS + NewsData.io
 
 import os
+import json
 import time
 import threading
+import urllib.request
+import urllib.parse
+from collections import Counter
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
 
@@ -15,6 +19,7 @@ import anthropic
 from fpdf import FPDF
 
 from regions import REGIONS
+from outlets import STATE_OUTLETS, OUTLET_DOMAINS
 from ranker import rank_articles
 from deduplicator import deduplicate_all
 
@@ -41,6 +46,16 @@ def _build_queries(location: str) -> list[str]:
     ]
 
 
+def _build_outlet_queries(location: str, domain: str) -> list[str]:
+    """Return 4 site-filtered queries for a specific outlet domain."""
+    return [
+        f"{location} politics site:{domain} when:2d",
+        f"{location} BJP Congress site:{domain} when:2d",
+        f"{location} MLA minister site:{domain} when:2d",
+        f"{location} election protest site:{domain} when:2d",
+    ]
+
+
 def _run_feeds(queries: list[str]) -> list:
     """Fetch all queries in parallel and return combined entries."""
     base = "https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN:en&q="
@@ -61,17 +76,31 @@ def _run_feeds(queries: list[str]) -> list:
     return combined
 
 
-def fetch_all_feeds(district: str, state: str) -> tuple[list, str]:
+def fetch_all_feeds(district: str, state: str, selected_outlets: list | None = None) -> tuple[list, str]:
     """Fetch news with district+state queries, falling back to state-only if needed.
+    When selected_outlets is provided, also runs 4 site-filtered queries per outlet.
     Returns (combined_entries, scope_used) where scope_used is 'district' or 'state'.
     """
-    entries = _run_feeds(_build_queries(f"{district} {state}"))
+    location = f"{district} {state}"
+    queries = _build_queries(location)
+    for outlet in (selected_outlets or []):
+        domain = OUTLET_DOMAINS.get(outlet)
+        if domain:
+            queries.extend(_build_outlet_queries(location, domain))
+
+    entries = _run_feeds(queries)
     recent, _ = filter_recent(entries, hours=36)
     if recent:
         return entries, "district"
 
     # Fallback: state-only queries
-    entries = _run_feeds(_build_queries(state))
+    state_queries = _build_queries(state)
+    for outlet in (selected_outlets or []):
+        domain = OUTLET_DOMAINS.get(outlet)
+        if domain:
+            state_queries.extend(_build_outlet_queries(state, domain))
+
+    entries = _run_feeds(state_queries)
     return entries, "state"
 
 
@@ -170,19 +199,86 @@ def summarize_article(title: str, description: str) -> str:
             return "Summary unavailable."
 
 
-def entries_to_dicts(entries: list) -> list:
+def entries_to_dicts(entries: list, channel: str = "rss") -> list:
     """Convert feedparser entries to ranker-compatible dicts."""
     dicts = []
     for e in entries:
         pub = parse_published(e)
         dicts.append({
-            "headline":     getattr(e, "title", "") or "",
-            "snippet":      getattr(e, "summary", "") or getattr(e, "description", "") or "",
-            "source_name":  get_outlet(e),
+            "headline":      getattr(e, "title", "") or "",
+            "snippet":       getattr(e, "summary", "") or getattr(e, "description", "") or "",
+            "source_name":   get_outlet(e),
             "published_iso": pub.isoformat() if pub else "",
-            "url":          getattr(e, "link", "") or "",
+            "url":           getattr(e, "link", "") or "",
+            "source_channel": channel,
         })
     return dicts
+
+
+def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: str) -> list:
+    """Fetch recent articles from NewsData.io filtered to specified outlet domains.
+    Returns a list of ranker-compatible dicts with source_channel='newsdata'.
+    """
+    if not api_key or not domains:
+        return []
+
+    location = f"{district} {state}"
+    queries = [
+        f"{location} politics",
+        f"{location} election BJP Congress MLA minister",
+    ]
+    domain_str = ",".join(domains)
+    base_url = "https://newsdata.io/api/1/latest"
+    all_articles = []
+
+    for q in queries:
+        params = {
+            "apikey":    api_key,
+            "q":         q,
+            "country":   "in",
+            "language":  "en",
+            "category":  "politics",
+            "domainurl": domain_str,
+        }
+        url = base_url + "?" + urllib.parse.urlencode(params)
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "PolitiScan/1.1"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+            for item in data.get("results", []):
+                all_articles.append({
+                    "headline":      item.get("title", ""),
+                    "snippet":       (item.get("description") or item.get("content") or "")[:600],
+                    "source_name":   item.get("source_id", "Unknown"),
+                    "published_iso": item.get("pubDate", ""),
+                    "url":           item.get("link", ""),
+                    "source_channel": "newsdata",
+                })
+        except Exception:
+            pass
+
+    # Filter to last 36 hours
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
+    recent = []
+    for art in all_articles:
+        try:
+            pub = datetime.fromisoformat(art["published_iso"].replace(" ", "T").replace("Z", "+00:00"))
+            if pub.tzinfo is None:
+                pub = pub.replace(tzinfo=timezone.utc)
+            if pub >= cutoff:
+                recent.append(art)
+        except Exception:
+            recent.append(art)  # include if date unparseable
+
+    # Deduplicate by URL
+    seen: set = set()
+    unique = []
+    for art in recent:
+        if art["url"] and art["url"] not in seen:
+            seen.add(art["url"])
+            unique.append(art)
+
+    return unique
 
 
 def summarize_all(ranked_articles: list, progress_bar=None, status_text=None) -> list:
@@ -351,6 +447,25 @@ def _show_results():
 
     st.info(st.session_state.results_caption)
 
+    # Source breakdown above results table
+    if "source_breakdown" in st.session_state:
+        bd = st.session_state.source_breakdown
+        rss_total     = bd.get("rss_total", 0)
+        nd_total      = bd.get("newsdata_total", 0)
+        outlet_counts = bd.get("outlet_counts", {})
+
+        header_parts = [f"**{rss_total}** articles from RSS"]
+        if nd_total:
+            header_parts.append(f"**{nd_total}** from NewsData.io")
+
+        top_outlets = sorted(outlet_counts.items(), key=lambda x: -x[1])[:8]
+        outlet_str  = "   ".join(f"**{k}:** {v}" for k, v in top_outlets)
+
+        breakdown_line = "   ".join(header_parts)
+        if outlet_str:
+            breakdown_line += "   —   " + outlet_str
+        st.caption(breakdown_line)
+
     all_rows       = st.session_state.results_rows
     selected_tags  = st.session_state.get("selected_tags", [])
     selected_types = st.session_state.get("selected_report_types", ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"])
@@ -397,6 +512,17 @@ with st.sidebar:
     state    = st.selectbox("State / UT", sorted(REGIONS.keys()))
     district = st.selectbox("District", REGIONS[state])
     zone     = st.text_input("Administrative Zone", placeholder="e.g. North Zone")
+
+    state_outlet_options = ["All Outlets"] + STATE_OUTLETS.get(state, [])
+    selected_outlets = st.multiselect(
+        "News Outlets",
+        options=state_outlet_options,
+        default=["All Outlets"],
+        placeholder="Select outlets to filter...",
+    )
+    # "All Outlets" in selection (or nothing selected) means no outlet filter
+    active_outlets = [o for o in selected_outlets if o != "All Outlets"]
+
     scan_clicked = st.button("Scan News", type="primary", use_container_width=True)
 
     # Tag filter + Story Sources — only shown when results are available
@@ -438,14 +564,15 @@ with st.sidebar:
 
 if scan_clicked:
     # Clear previous results so a fresh scan always re-runs fully
-    for key in ("results_rows", "results_caption", "pdf_buffer", "pdf_filename", "selected_tags", "selected_report_types"):
+    for key in ("results_rows", "results_caption", "pdf_buffer", "pdf_filename",
+                "selected_tags", "selected_report_types", "source_breakdown"):
         st.session_state.pop(key, None)
 
     api_key      = os.getenv("ANTHROPIC_API_KEY", "")
     region_label = f"{district}, {state}" + (f" ({zone})" if zone.strip() else "")
 
     with st.spinner("Fetching news from Google News RSS..."):
-        raw_entries, scope = fetch_all_feeds(district, state)
+        raw_entries, scope = fetch_all_feeds(district, state, active_outlets)
         recent, _  = filter_recent(raw_entries, hours=36)
         unique     = deduplicate(recent, threshold=0.70)
         total_fetched = len(unique)
@@ -453,7 +580,31 @@ if scan_clicked:
     if not unique:
         st.warning("No recent articles found for the selected region. Try a different district or check back later.")
     else:
-        article_dicts  = entries_to_dicts(unique)
+        article_dicts = entries_to_dicts(unique, channel="rss")
+
+        # Compute source breakdown from RSS articles before merging
+        outlet_counts = Counter(
+            a["source_name"] for a in article_dicts
+            if a.get("source_name") and a["source_name"] not in ("Unknown", "Google News", "")
+        )
+        rss_total = len(article_dicts)
+
+        # Fetch NewsData.io articles when specific outlets are selected
+        newsdata_dicts: list = []
+        if active_outlets:
+            nd_api_key  = os.getenv("NEWSDATA_API_KEY", "")
+            nd_domains  = [OUTLET_DOMAINS[o] for o in active_outlets if o in OUTLET_DOMAINS]
+            if nd_api_key and nd_domains:
+                with st.spinner(f"Fetching from NewsData.io ({len(nd_domains)} outlets)..."):
+                    newsdata_dicts = fetch_newsdata_articles(district, state, nd_domains, nd_api_key)
+                article_dicts = article_dicts + newsdata_dicts
+
+        st.session_state.source_breakdown = {
+            "rss_total":      rss_total,
+            "newsdata_total": len(newsdata_dicts),
+            "outlet_counts":  dict(outlet_counts),
+        }
+
         pre_dedup_count = len(article_dicts)
 
         with st.spinner("Deduplicating stories across sources..."):
