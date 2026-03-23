@@ -4,3 +4,7 @@ feedparser
 anthropic
 fpdf2
 langdetect
+newspaper3k
+pdfplumber
+pdf2image
+pytesseract

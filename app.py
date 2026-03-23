@@ -23,6 +23,7 @@ from outlets import STATE_OUTLETS, OUTLET_DOMAINS
 from ranker import rank_articles
 from deduplicator import deduplicate_all
 from translation import process_article
+from pdf_handler import fetch_article_content
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -301,11 +302,25 @@ def summarize_all(
     completed = 0
 
     def _process(i, art):
-        title        = art.get("headline", "No Title")
-        desc         = art.get("snippet") or art.get("content", "")
-        article_text = f"{title}\n{desc}"
-        result       = process_article(article_text, state, _api_keys)
-        return i, {**art, "Summary": result["summary"], "_language": result["original_language"]}
+        title = art.get("headline", "No Title")
+        url   = art.get("url", "")
+
+        # Fetch full article content before translation/summarisation
+        fetched_text, source_type = fetch_article_content(url, state)
+
+        if fetched_text:
+            article_text = f"{title}\n{fetched_text}"
+        else:
+            desc         = art.get("snippet") or art.get("content", "")
+            article_text = f"{title}\n{desc}"
+
+        result = process_article(article_text, state, _api_keys)
+        return i, {
+            **art,
+            "Summary":      result["summary"],
+            "_language":    result["original_language"],
+            "_source_type": source_type,
+        }
 
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(_process, i, a): i for i, a in enumerate(ranked_articles)}
@@ -678,7 +693,11 @@ if scan_clicked:
 
         # Build display rows — ALL ranked articles with real summaries
         summarized_map = {
-            a["url"]: {"summary": a.get("Summary", ""), "language": a.get("_language", "English")}
+            a["url"]: {
+                "summary":     a.get("Summary", ""),
+                "language":    a.get("_language", "English"),
+                "source_type": a.get("_source_type", "html"),
+            }
             for a in summarized
         }
         rows = []
@@ -688,6 +707,10 @@ if scan_clicked:
             signals_str     = _truncate_signals(art.get("speculation_signals", []))
             sources_display = art.get("source_name", "Unknown") if sc <= 1 else f"{sc} outlets"
             sm              = summarized_map.get(art.get("url", ""), {})
+            source_type     = sm.get("source_type", "html")
+            summary_text    = sm.get("summary", "")
+            if source_type == "failed":
+                summary_text = "[Manual Review Required]  " + summary_text
             rows.append({
                 "Rank":        i,
                 "Score":       round(art.get("final_score", 0), 1),
@@ -698,7 +721,7 @@ if scan_clicked:
                 "Headline":    art.get("headline", ""),
                 "Sources":     sources_display,
                 "Language":    sm.get("language", "English"),
-                "Summary":     sm.get("summary", ""),
+                "Summary":     summary_text,
                 "Link":        art.get("url", ""),
                 # internal keys for sidebar expander, PDF, and report-type filter
                 "_source_count": sc,
