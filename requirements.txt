@@ -3,3 +3,4 @@ streamlit
 feedparser
 anthropic
 fpdf2
+langdetect

@@ -22,6 +22,7 @@ from regions import REGIONS
 from outlets import STATE_OUTLETS, OUTLET_DOMAINS
 from ranker import rank_articles
 from deduplicator import deduplicate_all
+from translation import process_article
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -281,23 +282,33 @@ def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: s
     return unique
 
 
-def summarize_all(ranked_articles: list, progress_bar=None, status_text=None) -> list:
+def summarize_all(
+    ranked_articles: list,
+    state: str = "",
+    api_keys: dict | None = None,
+    progress_bar=None,
+    status_text=None,
+) -> list:
     """Summarise ranked article dicts in parallel (max 5 workers).
-    Adds a 'Summary' key to each dict and returns the list in the same order.
+    Detects language and produces a 4-line English summary via process_article.
+    Adds 'Summary' and '_language' keys to each dict; returns list in original order.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    total = len(ranked_articles)
-    rows = [None] * total
+    _api_keys = api_keys or {}
+    total     = len(ranked_articles)
+    rows      = [None] * total
     completed = 0
 
-    def process(i, art):
-        title = art.get("headline", "No Title")
-        desc  = art.get("snippet") or art.get("content", "")
-        return i, {**art, "Summary": summarize_article(title, desc)}
+    def _process(i, art):
+        title        = art.get("headline", "No Title")
+        desc         = art.get("snippet") or art.get("content", "")
+        article_text = f"{title}\n{desc}"
+        result       = process_article(article_text, state, _api_keys)
+        return i, {**art, "Summary": result["summary"], "_language": result["original_language"]}
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(process, i, a): i for i, a in enumerate(ranked_articles)}
+        futures = {executor.submit(_process, i, a): i for i, a in enumerate(ranked_articles)}
         for future in as_completed(futures):
             i, row = future.result()
             rows[i] = row
@@ -427,7 +438,7 @@ st.markdown("#### Political Intelligence Dashboard")
 
 
 _COL_ORDER = ["Rank", "Score", "Tag", "Region", "Report Type", "Signals",
-              "Headline", "Sources", "Summary", "Link"]
+              "Headline", "Sources", "Language", "Summary", "Link"]
 
 _TYPE_STYLES = {
     "CONFIRMED":   "background-color: #1a472a; color: white",
@@ -652,20 +663,31 @@ if scan_clicked:
         non_political = total_fetched - len(ranked)
         scope_note    = f" (state-level results for {state})" if scope == "state" else ""
 
+        _api_keys    = {"anthropic": api_key, "sarvam": os.getenv("SARVAM_API_KEY", "")}
         progress_bar = st.progress(0, text=f"Summarising article 0 of {len(ranked)}...")
         status_text  = st.empty()
-        summarized   = summarize_all(ranked, progress_bar=progress_bar, status_text=status_text)
+        summarized   = summarize_all(
+            ranked,
+            state=state,
+            api_keys=_api_keys,
+            progress_bar=progress_bar,
+            status_text=status_text,
+        )
         progress_bar.empty()
         status_text.empty()
 
         # Build display rows — ALL ranked articles with real summaries
-        summarized_map = {a["url"]: a.get("Summary", "") for a in summarized}
+        summarized_map = {
+            a["url"]: {"summary": a.get("Summary", ""), "language": a.get("_language", "English")}
+            for a in summarized
+        }
         rows = []
         for i, art in enumerate(ranked, start=1):
-            sc             = art.get("source_count", 1)
-            report_type    = art.get("report_type", "CONFIRMED")
-            signals_str    = _truncate_signals(art.get("speculation_signals", []))
+            sc              = art.get("source_count", 1)
+            report_type     = art.get("report_type", "CONFIRMED")
+            signals_str     = _truncate_signals(art.get("speculation_signals", []))
             sources_display = art.get("source_name", "Unknown") if sc <= 1 else f"{sc} outlets"
+            sm              = summarized_map.get(art.get("url", ""), {})
             rows.append({
                 "Rank":        i,
                 "Score":       round(art.get("final_score", 0), 1),
@@ -675,7 +697,8 @@ if scan_clicked:
                 "Signals":     signals_str,
                 "Headline":    art.get("headline", ""),
                 "Sources":     sources_display,
-                "Summary":     summarized_map.get(art.get("url", ""), ""),
+                "Language":    sm.get("language", "English"),
+                "Summary":     sm.get("summary", ""),
                 "Link":        art.get("url", ""),
                 # internal keys for sidebar expander, PDF, and report-type filter
                 "_source_count": sc,
