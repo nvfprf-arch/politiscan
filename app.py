@@ -1,4 +1,4 @@
-# NEWS SOURCE: Google News RSS + NewsData.io
+# NEWS SOURCE: NewsData.io primary + Google News RSS secondary
 
 import os
 import json
@@ -17,6 +17,7 @@ import streamlit as st
 import feedparser
 import anthropic
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 
 from regions import REGIONS
 from outlets import STATE_OUTLETS, OUTLET_DOMAINS
@@ -283,6 +284,79 @@ def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: s
     return unique
 
 
+def deduplicate_dicts(articles: list, threshold: float = 0.70) -> list:
+    """Remove dict articles whose headlines share > threshold word overlap with kept ones."""
+    unique = []
+    for art in articles:
+        title = art.get("headline", "") or ""
+        duplicate = False
+        for kept in unique:
+            if word_overlap(title, kept.get("headline", "") or "") > threshold:
+                duplicate = True
+                break
+        if not duplicate:
+            unique.append(art)
+    return unique
+
+
+def fetch_newsdata_primary(district: str, state: str, api_key: str) -> list:
+    """Fetch recent articles from NewsData.io as primary news source.
+    Uses full_content=1 so articles include full text for Claude.
+    Returns a list of ranker-compatible dicts with source_channel='newsdata'.
+    """
+    if not api_key:
+        return []
+
+    # Build URL manually to keep literal comma in language (urlencode encodes it as %2C)
+    base_params = urllib.parse.urlencode({
+        "apikey":   api_key,
+        "q":        f"{district} {state} politics",
+        "country":  "in",
+    })
+    url = f"https://newsdata.io/api/1/news?{base_params}&language=en,hi"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "PolitiScan/1.3"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception as e:
+        import sys
+        print(f"[NewsData] fetch error: {e}", file=sys.stderr)
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
+    seen: set = set()
+    articles = []
+    for item in data.get("results", []):
+        url_link = item.get("link", "")
+        if url_link and url_link in seen:
+            continue
+        if url_link:
+            seen.add(url_link)
+
+        pub_str = item.get("pubDate", "")
+        try:
+            pub = datetime.fromisoformat(pub_str.replace(" ", "T").replace("Z", "+00:00"))
+            if pub.tzinfo is None:
+                pub = pub.replace(tzinfo=timezone.utc)
+            if pub < cutoff:
+                continue
+            pub_iso = pub.isoformat()
+        except Exception:
+            pub_iso = pub_str  # include if date unparseable
+
+        full_content = item.get("content") or item.get("description") or ""
+        articles.append({
+            "headline":       item.get("title", ""),
+            "snippet":        (item.get("description") or "")[:600],
+            "full_content":   full_content,
+            "source_name":    item.get("source_id", "Unknown"),
+            "published_iso":  pub_iso,
+            "url":            url_link,
+            "source_channel": "newsdata",
+        })
+    return articles
+
+
 def summarize_all(
     ranked_articles: list,
     state: str = "",
@@ -305,14 +379,18 @@ def summarize_all(
         title = art.get("headline", "No Title")
         url   = art.get("url", "")
 
-        # Fetch full article content before translation/summarisation
-        fetched_text, source_type = fetch_article_content(url, state)
-
-        if fetched_text:
-            article_text = f"{title}\n{fetched_text}"
+        # NewsData.io articles: use full_content directly when available
+        if art.get("source_channel") == "newsdata" and art.get("full_content"):
+            article_text = f"{title}\n{art['full_content']}"
+            source_type  = "newsdata_full"
         else:
-            desc         = art.get("snippet") or art.get("content", "")
-            article_text = f"{title}\n{desc}"
+            # RSS articles: fetch full article content, fall back to snippet
+            fetched_text, source_type = fetch_article_content(url, state)
+            if fetched_text:
+                article_text = f"{title}\n{fetched_text}"
+            else:
+                desc         = art.get("snippet") or art.get("content", "")
+                article_text = f"{title}\n{desc}"
 
         result = process_article(article_text, state, _api_keys)
         return i, {
@@ -349,10 +427,10 @@ class PolitiScanPDF(FPDF):
 
     def header(self):
         self.set_font("Helvetica", "B", 16)
-        self.cell(0, 10, "PolitiScan", ln=True, align="C")
+        self.cell(0, 10, "PolitiScan", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
         self.set_font("Helvetica", "", 11)
-        self.cell(0, 7, f"Region: {self.region_label}", ln=True, align="C")
-        self.cell(0, 7, f"Date: {self.scan_date}", ln=True, align="C")
+        self.cell(0, 7, f"Region: {self.region_label}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        self.cell(0, 7, f"Date: {self.scan_date}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
         self.ln(4)
         self.set_draw_color(180, 180, 180)
         self.line(10, self.get_y(), 200, self.get_y())
@@ -362,7 +440,7 @@ class PolitiScanPDF(FPDF):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
         self.set_text_color(120, 120, 120)
-        self.cell(0, 10, "Confidential - For Internal Use Only", align="C")
+        self.cell(0, 10, "Confidential - For Internal Use Only", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
         self.set_text_color(0, 0, 0)
 
 def generate_pdf(articles: list, region_label: str) -> bytes:
@@ -396,13 +474,13 @@ def generate_pdf(articles: list, region_label: str) -> bytes:
 
         try:
             pdf.set_font("Helvetica", "B", 10)
-            pdf.cell(w=W, h=6, txt=headline, ln=True)
+            pdf.cell(w=W, h=6, text=headline, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         except Exception:
             pass
 
         try:
             pdf.set_font("Helvetica", "I", 9)
-            pdf.cell(w=W, h=5, txt=source_line, ln=True)
+            pdf.cell(w=W, h=5, text=source_line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         except Exception:
             pass
 
@@ -411,20 +489,20 @@ def generate_pdf(articles: list, region_label: str) -> bytes:
             if raw_sigs:
                 try:
                     pdf.set_font("Helvetica", "I", 8)
-                    pdf.cell(w=W, h=4, txt=safe(f"    Signals: {raw_sigs}"), ln=True)
+                    pdf.cell(w=W, h=4, text=safe(f"    Signals: {raw_sigs}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 except Exception:
                     pass
 
         try:
             pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(w=W, h=5, txt=summary)
+            pdf.multi_cell(w=W, h=5, text=summary)
         except Exception:
             pass
 
         try:
             pdf.set_font("Helvetica", "", 8)
             pdf.set_text_color(0, 0, 180)
-            pdf.multi_cell(w=W, h=4, txt=url)
+            pdf.multi_cell(w=W, h=4, text=url)
             pdf.set_text_color(0, 0, 0)
         except Exception:
             pdf.set_text_color(0, 0, 0)
@@ -480,9 +558,10 @@ def _show_results():
         nd_total      = bd.get("newsdata_total", 0)
         outlet_counts = bd.get("outlet_counts", {})
 
-        header_parts = [f"**{rss_total}** articles from RSS"]
+        header_parts = []
         if nd_total:
-            header_parts.append(f"**{nd_total}** from NewsData.io")
+            header_parts.append(f"**{nd_total}** from NewsData.io (primary)")
+        header_parts.append(f"**{rss_total}** from Google RSS (secondary)")
 
         top_outlets = sorted(outlet_counts.items(), key=lambda x: -x[1])[:8]
         outlet_str  = "   ".join(f"**{k}:** {v}" for k, v in top_outlets)
@@ -514,7 +593,7 @@ def _show_results():
 
     st.dataframe(
         styled,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Score":    st.column_config.NumberColumn("Score", format="%.1f"),
@@ -597,37 +676,60 @@ if scan_clicked:
     api_key      = os.getenv("ANTHROPIC_API_KEY", "")
     region_label = f"{district}, {state}" + (f" ({zone})" if zone.strip() else "")
 
-    with st.spinner("Fetching news from Google News RSS..."):
-        raw_entries, scope = fetch_all_feeds(district, state, active_outlets)
-        recent, _  = filter_recent(raw_entries, hours=36)
-        unique     = deduplicate(recent, threshold=0.70)
-        total_fetched = len(unique)
+    nd_api_key   = os.getenv("NEWSDATA_API_KEY", "")
+    rss_result   = [None, None]  # [entries, scope]
+    nd_result    = [[]]          # [dicts]
 
-    if not unique:
+    def _rss_worker():
+        entries, scope_val = fetch_all_feeds(district, state, active_outlets)
+        rss_result[0] = entries
+        rss_result[1] = scope_val
+
+    def _nd_worker():
+        import sys
+        try:
+            try:
+                _key = (st.secrets.get("NEWSDATA_API_KEY") or "").strip()
+            except Exception:
+                _key = ""
+            if not _key:
+                _key = os.getenv("NEWSDATA_API_KEY", "").strip()
+            nd_result[0] = fetch_newsdata_primary(district, state, _key)
+        except Exception as _e:
+            print(f"[NewsData Thread Error] {_e}", file=sys.stderr)
+            nd_result[0] = []
+
+    with st.spinner("Fetching news from NewsData.io and Google News RSS simultaneously..."):
+        t_rss = threading.Thread(target=_rss_worker, daemon=True)
+        t_nd  = threading.Thread(target=_nd_worker,  daemon=True)
+        t_rss.start(); t_nd.start()
+        t_rss.join();  t_nd.join()
+
+    raw_entries    = rss_result[0] or []
+    scope          = rss_result[1] or "district"
+    newsdata_dicts = nd_result[0] or []
+
+    recent, _  = filter_recent(raw_entries, hours=36)
+    unique_rss = deduplicate(recent, threshold=0.70)
+    rss_dicts  = entries_to_dicts(unique_rss, channel="rss")
+    rss_total  = len(rss_dicts)
+
+    unique_nd     = deduplicate_dicts(newsdata_dicts, threshold=0.70)
+    nd_count      = len(unique_nd)
+    total_fetched = rss_total + nd_count
+    article_dicts = rss_dicts + unique_nd
+
+    if not article_dicts:
         st.warning("No recent articles found for the selected region. Try a different district or check back later.")
     else:
-        article_dicts = entries_to_dicts(unique, channel="rss")
-
-        # Compute source breakdown from RSS articles before merging
         outlet_counts = Counter(
-            a["source_name"] for a in article_dicts
+            a["source_name"] for a in rss_dicts
             if a.get("source_name") and a["source_name"] not in ("Unknown", "Google News", "")
         )
-        rss_total = len(article_dicts)
-
-        # Fetch NewsData.io articles when specific outlets are selected
-        newsdata_dicts: list = []
-        if active_outlets:
-            nd_api_key  = os.getenv("NEWSDATA_API_KEY", "")
-            nd_domains  = [OUTLET_DOMAINS[o] for o in active_outlets if o in OUTLET_DOMAINS]
-            if nd_api_key and nd_domains:
-                with st.spinner(f"Fetching from NewsData.io ({len(nd_domains)} outlets)..."):
-                    newsdata_dicts = fetch_newsdata_articles(district, state, nd_domains, nd_api_key)
-                article_dicts = article_dicts + newsdata_dicts
 
         st.session_state.source_breakdown = {
             "rss_total":      rss_total,
-            "newsdata_total": len(newsdata_dicts),
+            "newsdata_total": nd_count,
             "outlet_counts":  dict(outlet_counts),
         }
 
@@ -736,7 +838,8 @@ if scan_clicked:
         dupes_merged = pre_dedup_count - post_dedup_count
         caption = (
             f"**{len(rows)} unique stories** from **{len(ranked)} political articles**{scope_note}.  "
-            f"{dupes_merged} duplicates merged.  {total_fetched} total fetched.  "
+            f"{dupes_merged} duplicates merged.  "
+            f"{total_fetched} articles total - {nd_count} from NewsData.io, {rss_total} from Google RSS.  "
             f"PDF contains top 15."
         )
 
