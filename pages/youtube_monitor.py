@@ -1,0 +1,443 @@
+import os
+import sys
+from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import difflib
+
+import streamlit as st
+import pandas as pd
+from dotenv import load_dotenv
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from channels import YOUTUBE_CHANNELS
+from youtube_handler import fetch_channel_videos, fetch_transcript, summarize_video
+from engagement_calculator import (
+    fetch_video_statistics,
+    calculate_engagement_velocity,
+    get_channel_tier,
+)
+from classifier import classify_political
+from ranker import rank_videos
+
+load_dotenv()
+
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+TIME_PERIOD_MAP = {
+    "Last 6 Hours": 6,
+    "Last 12 Hours": 12,
+    "Last 24 Hours": 24,
+    "Last 36 Hours": 36,
+}
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _titles_overlap(t1, t2, threshold=0.7):
+    return difflib.SequenceMatcher(None, t1.lower(), t2.lower()).ratio() >= threshold
+
+
+def _deduplicate(videos):
+    unique = []
+    for v in videos:
+        if not any(_titles_overlap(v["title"], u["title"]) for u in unique):
+            unique.append(v)
+    return unique
+
+
+def _get_channel_ids(language, selected_channels):
+    all_opt = "All Channels" if language == "All Languages" else f"All {language} Channels"
+    use_all = (not selected_channels) or (all_opt in selected_channels)
+
+    result = []
+    langs = YOUTUBE_CHANNELS.items() if language == "All Languages" else [(language, YOUTUBE_CHANNELS[language])]
+    for lang, channels in langs:
+        for name, cid in channels.items():
+            if use_all or name in selected_channels:
+                result.append({"name": name, "id": cid, "language": lang})
+    return result
+
+
+# ── Page config ───────────────────────────────────────────────────────────────
+
+st.set_page_config(page_title="YouTube Intelligence Monitor", layout="wide")
+st.title("YouTube Intelligence Monitor")
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
+
+with st.sidebar:
+    st.header("Scan Settings")
+
+    language = st.selectbox(
+        "Language",
+        ["All Languages"] + list(YOUTUBE_CHANNELS.keys()),
+    )
+
+    if language == "All Languages":
+        ch_options = ["All Channels"] + [
+            name for ch in YOUTUBE_CHANNELS.values() for name in ch
+        ]
+    else:
+        ch_options = [f"All {language} Channels"] + list(YOUTUBE_CHANNELS[language].keys())
+
+    selected_channels = st.multiselect(
+        "News Channel",
+        ch_options,
+        default=[ch_options[0]],
+    )
+
+    time_period = st.selectbox(
+        "Time Period",
+        list(TIME_PERIOD_MAP.keys()),
+        index=2,
+    )
+
+    keyword = st.text_input("Filter by Keyword (optional)")
+
+    scan_button = st.button("Scan and Rank", type="primary", use_container_width=True)
+
+    tag_filter = []
+    if "yt_results" in st.session_state and st.session_state["yt_results"]:
+        all_tags = sorted({
+            v.get("primary_tag", "")
+            for v in st.session_state["yt_results"]
+            if v.get("primary_tag")
+        })
+        if all_tags:
+            tag_filter = st.multiselect("Filter by Tag", all_tags)
+
+
+# ── Pipeline ──────────────────────────────────────────────────────────────────
+
+if scan_button:
+    if not YOUTUBE_API_KEY:
+        st.error("YOUTUBE_API_KEY is not set in environment.")
+        st.stop()
+    if not ANTHROPIC_API_KEY:
+        st.error("ANTHROPIC_API_KEY is not set in environment.")
+        st.stop()
+
+    channel_data = _get_channel_ids(language, selected_channels)
+    if not channel_data:
+        st.warning("No channels selected.")
+        st.stop()
+
+    hours_back = TIME_PERIOD_MAP[time_period]
+    status_box = st.empty()
+
+    # Step 1: Fetch videos
+    status_box.info(f"Step 1/7 — Fetching videos from {len(channel_data)} channels...")
+    print(f"[YT] Step 1: fetching from {len(channel_data)} channels")
+
+    def _fetch_channel(ch):
+        try:
+            vids = fetch_channel_videos(ch["id"], YOUTUBE_API_KEY, hours_back)
+            for v in vids:
+                v["language"] = ch["language"]
+                v.setdefault("channel_name", ch["name"])
+            return vids
+        except Exception:
+            return []
+
+    raw_videos = []
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        for result in as_completed([ex.submit(_fetch_channel, ch) for ch in channel_data]):
+            raw_videos.extend(result.result())
+
+    # Step 2: Deduplicate
+    unique_videos = _deduplicate(raw_videos)
+    total_fetched = len(unique_videos)
+    print(f"[YT] Step 2: {total_fetched} unique videos after dedup")
+
+    # Step 3: Classify
+    status_box.info(f"Step 2/7 — Classifying {total_fetched} videos for political relevance...")
+    print(f"[YT] Step 3: classifying {total_fetched} videos")
+
+    def _classify(v):
+        try:
+            result = classify_political(v["title"], "", ANTHROPIC_API_KEY)
+        except Exception as e:
+            result = {"classification": "NOT_POLITICAL", "confidence": 0.0, "reason": str(e)}
+        return v, result
+
+    political_videos = []
+    with ThreadPoolExecutor(max_workers=20) as ex:
+        for future in as_completed([ex.submit(_classify, v) for v in unique_videos]):
+            v, result = future.result()
+            if result["classification"] != "NOT_POLITICAL":
+                political_videos.append(v)
+
+    non_political_count = total_fetched - len(political_videos)
+    print(f"[YT] Step 3 done: {len(political_videos)} political, {non_political_count} non-political")
+
+    # Step 4: Cap at top 30 most recent
+    political_videos_sorted = sorted(
+        political_videos,
+        key=lambda v: v.get("published_at", ""),
+        reverse=True,
+    )
+    videos_to_rank = political_videos_sorted[:30]
+    status_box.info(
+        f"Step 3/7 — Ranking top 30 most recent political videos "
+        f"from {len(political_videos)} total political found. Fetching engagement data..."
+    )
+    print(f"[YT] Step 4: capped to {len(videos_to_rank)} videos for ranking")
+
+    # Step 5: Fetch stats + transcripts
+    status_box.info(f"Step 4/7 — Fetching transcripts and engagement metrics for {len(videos_to_rank)} videos...")
+    print(f"[YT] Step 5: fetching stats + transcripts")
+
+    def _fetch_stats_and_transcript(v):
+        stats = fetch_video_statistics(v["video_id"], YOUTUBE_API_KEY)
+        transcript = fetch_transcript(v["video_id"], v.get("language", "English"))
+        return v["video_id"], stats, transcript
+
+    stats_map = {}
+    transcript_map = {}
+    with ThreadPoolExecutor(max_workers=15) as ex:
+        futures = {ex.submit(_fetch_stats_and_transcript, v): v["video_id"] for v in videos_to_rank}
+        for f in as_completed(futures):
+            vid_id, stats, transcript = f.result()
+            stats_map[vid_id] = stats
+            transcript_map[vid_id] = transcript
+
+    print(f"[YT] Step 5 done: stats+transcripts fetched")
+
+    # Step 6: Engagement scores + channel tier
+    status_box.info(f"Step 5/7 — Calculating engagement scores for {len(videos_to_rank)} videos...")
+    print(f"[YT] Step 6: calculating engagement")
+
+    for v in videos_to_rank:
+        stats = stats_map.get(v["video_id"], {"viewCount": 0, "likeCount": 0, "commentCount": 0})
+        eng = calculate_engagement_velocity(stats, v["published_at"])
+        v.update(stats)
+        v.update(eng)
+        v["channel_tier"] = get_channel_tier(v.get("channel_name", ""))
+        v["transcript"] = transcript_map.get(v["video_id"])
+
+    # Step 7: Rank
+    status_box.info(f"Step 6/7 — Ranking {len(videos_to_rank)} videos by political significance...")
+    print(f"[YT] Step 7: ranking")
+    ranked = rank_videos(videos_to_rank, "", "", ANTHROPIC_API_KEY)
+    print(f"[YT] Step 7 done: {len(ranked)} ranked")
+
+    # Step 8: Summarize in parallel
+    status_box.info(f"Step 7/7 — Summarizing {len(ranked)} ranked videos...")
+    print(f"[YT] Step 8: summarizing")
+
+    def _summarize(v):
+        result = summarize_video(
+            v["title"],
+            v.get("transcript"),
+            v.get("channel_name", ""),
+            v.get("language", "English"),
+            ANTHROPIC_API_KEY,
+        )
+        v["summary"] = result["summary"]
+        v["transcript_status"] = result["transcript_status"]
+        return v
+
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        ranked = list(ex.map(_summarize, ranked))
+
+    print(f"[YT] Step 8 done: summaries complete")
+
+    # Step 9: Keyword filter
+    if keyword.strip():
+        kw = keyword.strip().lower()
+        ranked = [
+            v for v in ranked
+            if kw in v["title"].lower() or kw in v.get("summary", "").lower()
+        ]
+
+    status_box.empty()
+
+    st.session_state["yt_results"] = ranked
+    st.session_state["yt_summary"] = {
+        "total_fetched": total_fetched,
+        "non_political_removed": non_political_count,
+        "political_ranked": len(ranked),
+        "keyword": keyword.strip(),
+        "language": language,
+        "selected_channels": selected_channels,
+        "time_period": time_period,
+    }
+
+    print(f"[YT] Pipeline complete. {len(ranked)} results stored in session_state.")
+
+
+# ── Results ───────────────────────────────────────────────────────────────────
+
+if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
+    meta = st.session_state["yt_summary"]
+    results = st.session_state["yt_results"]
+
+    display_results = (
+        [v for v in results if v.get("primary_tag") in tag_filter]
+        if tag_filter else results
+    )
+
+    # Stats summary line
+    stats_md = (
+        f"**Total fetched:** {meta['total_fetched']} &nbsp;|&nbsp; "
+        f"**Non-political removed:** {meta['non_political_removed']} &nbsp;|&nbsp; "
+        f"**Political ranked:** {meta['political_ranked']}"
+    )
+    if meta.get("keyword"):
+        stats_md += (
+            f" &nbsp;|&nbsp; **Filtered to:** {len(display_results)} "
+            f"matching `{meta['keyword']}`"
+        )
+    st.markdown(stats_md)
+
+    if not display_results:
+        st.info("No results match the current filters.")
+    else:
+        rows = []
+        for rank_idx, v in enumerate(display_results, 1):
+            rows.append({
+                "Rank": rank_idx,
+                "Score": round(v.get("final_score", 0), 2),
+                "Tag": v.get("primary_tag", ""),
+                "Trending": "🔥" if v.get("engagement_velocity_score", 0) > 7 else "",
+                "Title": v.get("title", ""),
+                "Channel": v.get("channel_name", ""),
+                "Views/hr": int(v.get("views_per_hour", 0)),
+                "Upload Time": v.get("published_at", "")[:16].replace("T", " "),
+                "Summary": v.get("summary", "").removeprefix("## Summary").removeprefix("## ").lstrip(),
+                "Transcript Status": v.get("transcript_status", ""),
+                "YouTube Link": v.get("youtube_url", ""),
+            })
+
+        df = pd.DataFrame(rows)
+
+        def _score_style(val):
+            if val >= 8:
+                return "background-color: #ff4b4b; color: white"
+            if val >= 6:
+                return "background-color: #ffa500"
+            return ""
+
+        styled = df.style.map(_score_style, subset=["Score"])
+
+        st.dataframe(
+            styled,
+            width="stretch",
+            column_config={
+                "YouTube Link": st.column_config.LinkColumn("YouTube Link"),
+                "Summary": st.column_config.TextColumn("Summary", width="large"),
+                "Title": st.column_config.TextColumn("Title", width="medium"),
+            },
+            hide_index=True,
+        )
+
+    # ── PDF Report ────────────────────────────────────────────────────────────
+    st.divider()
+    if st.button("Generate PDF Report"):
+        from fpdf import FPDF
+
+        def _safe(text):
+            return "".join(c if ord(c) < 256 else "?" for c in str(text))
+
+        class PolitiScanPDF(FPDF):
+            def footer(self):
+                self.set_y(-15)
+                self.set_font("Helvetica", "I", 8)
+                self.set_text_color(128, 128, 128)
+                self.cell(0, 10, "Confidential - For Internal Use Only", align="C")
+
+        pdf = PolitiScanPDF()
+        pdf.set_auto_page_break(auto=True, margin=20)
+        pdf.add_page()
+
+        ch_str = _safe(", ".join(meta["selected_channels"])) if meta.get("selected_channels") else "All"
+
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, "PolitiScan YouTube Intelligence Report", ln=True, align="C")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 6, f"Language: {meta['language']}  |  Channels: {ch_str}", ln=True, align="C")
+        pdf.cell(
+            0, 6,
+            f"Time Period: {meta['time_period']}  |  "
+            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} UTC",
+            ln=True, align="C",
+        )
+        pdf.ln(6)
+
+        pdf.set_fill_color(230, 230, 230)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 8, "Scan Summary", ln=True, fill=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(
+            0, 6,
+            f"Total Fetched: {meta['total_fetched']}   |   "
+            f"Non-political Removed: {meta['non_political_removed']}   |   "
+            f"Ranked: {meta['political_ranked']}",
+            ln=True,
+        )
+        pdf.ln(6)
+
+        for rank_idx, v in enumerate(display_results, 1):
+            score = round(v.get("final_score", 0), 2)
+            evs = v.get("engagement_velocity_score", 0)
+            tag = _safe(v.get("primary_tag", ""))
+            title = _safe(v.get("title", ""))
+            channel = _safe(v.get("channel_name", ""))
+            upload_time = v.get("published_at", "")[:16].replace("T", " ")
+            vph = int(v.get("views_per_hour", 0))
+            summary_text = _safe(v.get("summary", ""))
+            url = v.get("youtube_url", "")
+            t_status = v.get("transcript_status", "")
+            trending_label = "  [TRENDING]" if evs > 7 else ""
+
+            pdf.set_fill_color(235, 235, 245)
+            pdf.set_draw_color(180, 180, 180)
+            pdf.set_line_width(0.3)
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.cell(
+                0, 7,
+                f"#{rank_idx}   Score: {score}   [{tag}]{trending_label}",
+                ln=True, fill=True, border="TLR",
+            )
+
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.multi_cell(0, 6, title, border="LR")
+
+            pdf.set_font("Helvetica", "I", 9)
+            pdf.cell(
+                0, 6,
+                f"{channel}  |  Uploaded: {upload_time}  |  Views/hr: {vph:,}",
+                ln=True, border="LR",
+            )
+
+            pdf.set_font("Helvetica", "", 9)
+            pdf.multi_cell(0, 5, summary_text, border="LR")
+
+            if t_status == "Title Only":
+                pdf.set_font("Helvetica", "I", 8)
+                pdf.set_fill_color(255, 245, 200)
+                pdf.cell(
+                    0, 5,
+                    "  Note: Transcript unavailable - summary based on title only.",
+                    ln=True, fill=True, border="LR",
+                )
+                pdf.set_fill_color(235, 235, 245)
+
+            pdf.set_font("Helvetica", "U", 8)
+            pdf.set_text_color(0, 0, 200)
+            pdf.cell(0, 6, url, ln=True, border="LRB")
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(4)
+
+        pdf_bytes = bytes(pdf.output())
+        st.download_button(
+            label="Download PDF",
+            data=pdf_bytes,
+            file_name=f"politiscan_youtube_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+            mime="application/pdf",
+        )
+
+elif "yt_results" in st.session_state and len(st.session_state["yt_results"]) == 0:
+    st.warning("No political videos found. Try a longer time period or different channels.")

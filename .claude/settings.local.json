@@ -6,7 +6,8 @@
       "Bash(git add:*)",
       "Bash(git restore:*)",
       "Bash(find C:UsersARUNDHATIpolitiscan -type f -name *.md -o -name *.txt -o -name *.rst -o -name *README* -o -name *BUILD* -o -name *GUIDE* -o -name *ROADMAP*)",
-      "Bash(git -C \"C:\\\\Users\\\\ARUNDHATI\\\\politiscan\" log --oneline)"
+      "Bash(git -C \"C:\\\\Users\\\\ARUNDHATI\\\\politiscan\" log --oneline)",
+      "Bash(winget upgrade:*)"
     ]
   }
 }

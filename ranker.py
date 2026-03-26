@@ -121,22 +121,17 @@ def _process_video(video: dict, state: str, district: str, api_key: str) -> dict
     published       = video.get("published_iso", "")
     engagement_score = float(video.get("engagement_score", 5.0))
 
-    # Step 1 — classify
-    cls = classify_political(headline, snippet, api_key)
-    if cls["classification"] != "POLITICAL":
-        return None
-
-    # Step 2 — importance score
+    # Step 1 — importance score
     imp = score_importance(headline, snippet, source_name, published, state, district, api_key)
 
-    # Step 3 — source tier & score
+    # Step 2 — source tier & score
     tier         = get_source_tier(source_name)
     source_score = SOURCE_TIER_SCORES.get(tier, 4)
 
-    # Step 4 — recency
+    # Step 3 — recency
     recency_score = calculate_recency_score(published)
 
-    # Step 5 — final score (video formula)
+    # Step 4 — final score (video formula)
     final_score = round(
         imp["importance_score"] * 0.40
         + engagement_score       * 0.25
@@ -145,11 +140,9 @@ def _process_video(video: dict, state: str, district: str, api_key: str) -> dict
         2,
     )
 
-    # Step 6 — assemble
+    # Step 5 — assemble
     return {
         **video,
-        "classification":        cls["classification"],
-        "confidence":            cls["confidence"],
         "importance_score":      imp["importance_score"],
         "primary_tag":           imp["primary_tag"],
         "one_line_reason":       imp["one_line_reason"],
@@ -177,6 +170,7 @@ def rank_videos(
 
     Returns videos that are POLITICAL, sorted by final_score descending.
     """
+    print(f"[ranker] rank_videos called with {len(videos_list)} videos")
     results = []
     processed = 0
 
@@ -193,7 +187,9 @@ def rank_videos(
             if result is not None:
                 results.append(result)
 
+    print(f"[ranker] videos scored: {len(results)}")
     results.sort(key=lambda x: x["final_score"], reverse=True)
+    print(f"[ranker] returning {len(results)} results")
     return results
 
 
