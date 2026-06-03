@@ -128,13 +128,13 @@ def score_importance(
     try:
         result = json.loads(raw)
         return {
-            "importance_score":      int(result.get("importance_score", 5)),
+            "importance_score":      int(result.get("importance_score") or 5),
             "primary_tag":           str(result.get("primary_tag", "STATEMENT")),
             "one_line_reason":       str(result.get("one_line_reason", "")),
             "affects_client_region": bool(result.get("affects_client_region", False)),
             "report_type":           str(result.get("report_type", "CONFIRMED")),
             "speculation_signals":   list(result.get("speculation_signals", [])),
-            "type_confidence":       float(result.get("type_confidence", 0.0)),
+            "type_confidence":       float(result.get("type_confidence") or 0.0),
         }
     except (json.JSONDecodeError, ValueError, KeyError):
         return {

@@ -1,4 +1,6 @@
+import html
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -24,6 +26,23 @@ load_dotenv()
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+_TYPE_STYLES = {
+    "CONFIRMED":   "background-color: #1a472a; color: white",
+    "SPECULATIVE": "background-color: #7d4e00; color: white",
+    "ANALYTICAL":  "background-color: #1a3a5c; color: white",
+}
+
+
+def _style_report_type(col):
+    return col.map(lambda v: _TYPE_STYLES.get(v, ""))
+
+
+def _truncate_signals(signals, max_len=80):
+    if not signals:
+        return ""
+    joined = ", ".join(str(s) for s in signals)
+    return joined if len(joined) <= max_len else joined[:max_len - 1] + "…"
 
 TIME_PERIOD_MAP = {
     "Last 6 Hours": 6,
@@ -99,6 +118,7 @@ with st.sidebar:
     scan_button = st.button("Scan and Rank", type="primary", use_container_width=True)
 
     tag_filter = []
+    report_type_filter = ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
     if "yt_results" in st.session_state and st.session_state["yt_results"]:
         all_tags = sorted({
             v.get("primary_tag", "")
@@ -107,6 +127,12 @@ with st.sidebar:
         })
         if all_tags:
             tag_filter = st.multiselect("Filter by Tag", all_tags)
+
+        report_type_filter = st.multiselect(
+            "Show Report Types",
+            ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
+            default=["CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
+        )
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -135,6 +161,7 @@ if scan_button:
         try:
             vids = fetch_channel_videos(ch["id"], YOUTUBE_API_KEY, hours_back)
             for v in vids:
+                v["title"] = html.unescape(v.get("title", ""))
                 v["language"] = ch["language"]
                 v.setdefault("channel_name", ch["name"])
             return vids
@@ -237,6 +264,9 @@ if scan_button:
         )
         v["summary"] = result["summary"]
         v["transcript_status"] = result["transcript_status"]
+        v["report_type"] = result["report_type"]
+        v["speculation_signals"] = result["speculation_signals"]
+        v["type_confidence"] = result["type_confidence"]
         return v
 
     with ThreadPoolExecutor(max_workers=10) as ex:
@@ -278,6 +308,11 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
         [v for v in results if v.get("primary_tag") in tag_filter]
         if tag_filter else results
     )
+    if report_type_filter:
+        display_results = [
+            v for v in display_results
+            if v.get("report_type", "CONFIRMED") in report_type_filter
+        ]
 
     # Stats summary line
     stats_md = (
@@ -306,8 +341,10 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
                 "Channel": v.get("channel_name", ""),
                 "Views/hr": int(v.get("views_per_hour", 0)),
                 "Upload Time": v.get("published_at", "")[:16].replace("T", " "),
-                "Summary": v.get("summary", "").removeprefix("## Summary").removeprefix("## ").lstrip(),
+                "Summary": re.sub(r'^\*\*Summary[:\s]*\*\*\s*', '', v.get("summary", "").removeprefix("## Summary").removeprefix("## ")).lstrip(),
                 "Transcript Status": v.get("transcript_status", ""),
+                "Report Type": v.get("report_type", "CONFIRMED"),
+                "Signals": _truncate_signals(v.get("speculation_signals", [])),
                 "YouTube Link": v.get("youtube_url", ""),
             })
 
@@ -320,7 +357,11 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
                 return "background-color: #ffa500"
             return ""
 
-        styled = df.style.map(_score_style, subset=["Score"])
+        styled = (
+            df.style
+            .map(_score_style, subset=["Score"])
+            .apply(_style_report_type, subset=["Report Type"])
+        )
 
         st.dataframe(
             styled,
@@ -329,6 +370,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
                 "YouTube Link": st.column_config.LinkColumn("YouTube Link"),
                 "Summary": st.column_config.TextColumn("Summary", width="large"),
                 "Title": st.column_config.TextColumn("Title", width="medium"),
+                "Signals": st.column_config.TextColumn("Signals", width="medium"),
             },
             hide_index=True,
         )
@@ -390,6 +432,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             summary_text = _safe(v.get("summary", ""))
             url = v.get("youtube_url", "")
             t_status = v.get("transcript_status", "")
+            report_type = v.get("report_type", "CONFIRMED")
             trending_label = "  [TRENDING]" if evs > 7 else ""
 
             pdf.set_fill_color(235, 235, 245)
@@ -403,7 +446,17 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             )
 
             pdf.set_font("Helvetica", "B", 10)
-            pdf.multi_cell(0, 6, title, border="LR")
+            pdf.multi_cell(0, 6, f"{title}  [{report_type}]", border="LR")
+
+            if report_type == "SPECULATIVE":
+                signals = v.get("speculation_signals", [])
+                if signals:
+                    pdf.set_font("Helvetica", "I", 8)
+                    pdf.cell(
+                        0, 5,
+                        _safe(f"    Signals: {_truncate_signals(signals)}"),
+                        ln=True, border="LR",
+                    )
 
             pdf.set_font("Helvetica", "I", 9)
             pdf.cell(

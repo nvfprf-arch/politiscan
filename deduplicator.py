@@ -4,10 +4,17 @@ load_dotenv()
 import os
 import json
 import anthropic
+import streamlit as st
 from sentence_transformers import SentenceTransformer, util
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
-print("Embedding model loaded.")
+
+@st.cache_resource
+def _load_embedding_model():
+    print("Embedding model loaded.")
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+
+model = _load_embedding_model()
 
 
 def deduplicate_by_url(items: list) -> list:
