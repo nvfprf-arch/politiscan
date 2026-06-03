@@ -7,7 +7,9 @@
       "Bash(git restore:*)",
       "Bash(find C:UsersARUNDHATIpolitiscan -type f -name *.md -o -name *.txt -o -name *.rst -o -name *README* -o -name *BUILD* -o -name *GUIDE* -o -name *ROADMAP*)",
       "Bash(git -C \"C:\\\\Users\\\\ARUNDHATI\\\\politiscan\" log --oneline)",
-      "Bash(winget upgrade:*)"
+      "Bash(winget upgrade:*)",
+      "Bash(git push:*)",
+      "Skill(claude-api)"
     ]
   }
 }

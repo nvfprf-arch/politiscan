@@ -25,6 +25,8 @@ from ranker import rank_articles
 from deduplicator import deduplicate_all
 from translation import process_article
 from pdf_handler import fetch_article_content
+from feedback_store import record_promotion, get_profile_status, should_generate_profile
+from profile_analyzer import check_and_refresh_profile, load_client_profile
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -260,7 +262,6 @@ def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: s
         except Exception:
             pass
 
-    # Filter to last 36 hours
     cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
     recent = []
     for art in all_articles:
@@ -271,9 +272,8 @@ def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: s
             if pub >= cutoff:
                 recent.append(art)
         except Exception:
-            recent.append(art)  # include if date unparseable
+            recent.append(art)
 
-    # Deduplicate by URL
     seen: set = set()
     unique = []
     for art in recent:
@@ -301,13 +301,11 @@ def deduplicate_dicts(articles: list, threshold: float = 0.70) -> list:
 
 def fetch_newsdata_primary(district: str, state: str, api_key: str) -> list:
     """Fetch recent articles from NewsData.io as primary news source.
-    Uses full_content=1 so articles include full text for Claude.
     Returns a list of ranker-compatible dicts with source_channel='newsdata'.
     """
     if not api_key:
         return []
 
-    # Build URL manually to keep literal comma in language (urlencode encodes it as %2C)
     base_params = urllib.parse.urlencode({
         "apikey":   api_key,
         "q":        f"{district} {state} politics",
@@ -342,7 +340,7 @@ def fetch_newsdata_primary(district: str, state: str, api_key: str) -> list:
                 continue
             pub_iso = pub.isoformat()
         except Exception:
-            pub_iso = pub_str  # include if date unparseable
+            pub_iso = pub_str
 
         full_content = item.get("content") or item.get("description") or ""
         articles.append({
@@ -379,12 +377,10 @@ def summarize_all(
         title = art.get("headline", "No Title")
         url   = art.get("url", "")
 
-        # NewsData.io articles: use full_content directly when available
         if art.get("source_channel") == "newsdata" and art.get("full_content"):
             article_text = f"{title}\n{art['full_content']}"
             source_type  = "newsdata_full"
         else:
-            # RSS articles: fetch full article content, fall back to snippet
             fetched_text, source_type = fetch_article_content(url, state)
             if fetched_text:
                 article_text = f"{title}\n{fetched_text}"
@@ -443,6 +439,7 @@ class PolitiScanPDF(FPDF):
         self.cell(0, 10, "Confidential - For Internal Use Only", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
         self.set_text_color(0, 0, 0)
 
+
 def generate_pdf(articles: list, region_label: str) -> bytes:
     def safe(text: str) -> str:
         return (text or "").encode("latin-1", errors="replace").decode("latin-1")
@@ -453,7 +450,7 @@ def generate_pdf(articles: list, region_label: str) -> bytes:
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
 
-    W = 170  # explicit content width — never use w=0 on multi_cell
+    W = 170
 
     for i, art in enumerate(articles, start=1):
         rank       = art.get("Rank", i)
@@ -462,8 +459,8 @@ def generate_pdf(articles: list, region_label: str) -> bytes:
         rtype      = art.get("_report_type", "CONFIRMED")
         score_tag  = f"  [Score: {score}]  [{tag}]  [{rtype}]" if (score or tag) else f"  [{rtype}]"
         headline   = safe(f"#{rank}{score_tag}  {art.get('Headline', '')}")
-        sc            = art.get("_source_count", 1)
-        sources_list  = art.get("_sources_list", [art.get("News Outlet", "Unknown")])
+        sc           = art.get("_source_count", 1)
+        sources_list = art.get("_sources_list", [art.get("News Outlet", "Unknown")])
         if sc >= 2:
             source_line = safe(f"Covered by {sc} outlets: {', '.join(sources_list)}")
         else:
@@ -512,22 +509,124 @@ def generate_pdf(articles: list, region_label: str) -> bytes:
     return pdf.output()
 
 
+class PolitiScanShortlistPDF(FPDF):
+    def __init__(self, region_label: str, email: str, scan_date: str):
+        super().__init__()
+        self.region_label = region_label
+        self.email = email
+        self.scan_date = scan_date
+
+    def header(self):
+        self.set_font("Helvetica", "B", 16)
+        self.cell(0, 10, "PolitiScan Intelligence Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        self.set_font("Helvetica", "", 10)
+        self.cell(0, 6, self.email, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        self.cell(0, 6, f"Region: {self.region_label}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        self.cell(0, 6, f"Date: {self.scan_date}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        self.ln(4)
+        self.set_draw_color(180, 180, 180)
+        self.line(10, self.get_y(), 200, self.get_y())
+        self.ln(4)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.set_text_color(120, 120, 120)
+        self.cell(0, 10, "Confidential - For Internal Use Only", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        self.set_text_color(0, 0, 0)
+
+
+def generate_pdf_shortlist(articles: list, region_label: str, email: str) -> bytes:
+    def safe(text: str) -> str:
+        return (text or "").encode("latin-1", errors="replace").decode("latin-1")
+
+    scan_date = datetime.now().strftime("%d %B %Y")
+    pdf = PolitiScanShortlistPDF(region_label=region_label, email=email, scan_date=scan_date)
+    pdf.set_margins(left=20, top=15, right=20)
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    W = 170
+
+    for i, art in enumerate(articles, start=1):
+        rank    = art.get("Rank", i)
+        score   = art.get("Score", "")
+        tag     = art.get("Tag", "")
+        rtype   = art.get("_report_type", "CONFIRMED")
+        boosted = art.get("_profile_boosted", False)
+
+        meta_parts = [f"#{rank}", f"Score: {score}", f"[{tag}]", f"[{rtype}]"]
+        if boosted:
+            meta_parts.append("[Personalised]")
+        meta_line = safe("  ".join(meta_parts))
+
+        headline = safe(art.get("Headline", ""))
+        outlet   = safe(art.get("Sources", "Unknown"))
+        summary  = safe(art.get("Summary", ""))
+        raw_url  = art.get("Link", "") or ""
+        url      = safe(raw_url if len(raw_url) <= 80 else raw_url[:77] + "...")
+
+        try:
+            pdf.set_font("Helvetica", "", 9)
+            pdf.cell(w=W, h=5, text=meta_line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        except Exception:
+            pass
+
+        try:
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.multi_cell(w=W, h=6, text=headline)
+        except Exception:
+            pass
+
+        try:
+            pdf.set_font("Helvetica", "I", 9)
+            pdf.cell(w=W, h=5, text=safe(f"Source: {outlet}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        except Exception:
+            pass
+
+        try:
+            pdf.set_font("Helvetica", "", 9)
+            pdf.multi_cell(w=W, h=5, text=summary)
+        except Exception:
+            pass
+
+        try:
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(0, 0, 180)
+            pdf.multi_cell(w=W, h=4, text=url)
+            pdf.set_text_color(0, 0, 0)
+        except Exception:
+            pdf.set_text_color(0, 0, 0)
+
+        pdf.ln(5)
+
+    return pdf.output()
+
+
 def _truncate_signals(signals: list, max_len: int = 80) -> str:
     """Join speculation signals into a string, truncated to max_len chars."""
     if not signals:
         return ""
     joined = ", ".join(str(s) for s in signals)
-    return joined if len(joined) <= max_len else joined[:max_len - 1] + "…"
+    return joined if len(joined) <= max_len else joined[:max_len - 1] + "\u2026"
 
 
 # ---------------------------------------------------------------------------
 # Streamlit UI
 # ---------------------------------------------------------------------------
 
-st.set_page_config(page_title="PolitiScan", page_icon="🗳️", layout="wide")
+st.set_page_config(page_title="PolitiScan", page_icon="\U0001f5f3\ufe0f", layout="wide")
 st.title("PolitiScan")
 st.markdown("#### Political Intelligence Dashboard")
 
+# Session state: user email (hardcoded until V2 login)
+if "user_email" not in st.session_state:
+    st.session_state.user_email = "test@politiscan.in"
+
+# Load/refresh client profile once per session
+if "profile_loaded" not in st.session_state:
+    st.session_state.client_profile = check_and_refresh_profile(st.session_state.user_email)
+    st.session_state.profile_loaded = True
 
 
 _COL_ORDER = ["Rank", "Score", "Tag", "Region", "Report Type", "Signals",
@@ -546,12 +645,12 @@ def _style_report_type(col):
 
 
 def _show_results():
-    """Render caption, filtered+styled table, and download button from session state."""
+    """Render AI Shortlist section, Read All section, and Export to PDF."""
     import pandas as pd
 
     st.info(st.session_state.results_caption)
 
-    # Source breakdown above results table
+    # Source breakdown
     if "source_breakdown" in st.session_state:
         bd = st.session_state.source_breakdown
         rss_total     = bd.get("rss_total", 0)
@@ -568,10 +667,11 @@ def _show_results():
 
         breakdown_line = "   ".join(header_parts)
         if outlet_str:
-            breakdown_line += "   —   " + outlet_str
+            breakdown_line += "   \u2014   " + outlet_str
         st.caption(breakdown_line)
 
     all_rows       = st.session_state.results_rows
+    total_political = len(all_rows)
     selected_tags  = st.session_state.get("selected_tags", [])
     selected_types = st.session_state.get("selected_report_types", ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"])
 
@@ -581,36 +681,114 @@ def _show_results():
     if selected_types:
         filtered = [r for r in filtered if r.get("_report_type", "CONFIRMED") in selected_types]
 
-    # Sort by Score descending and re-sequence Rank
-    filtered = sorted(filtered, key=lambda r: r.get("Score", 0), reverse=True)
+    filtered = sorted(filtered, key=lambda r: r.get("_client_adjusted_score", r.get("Score", 0)), reverse=True)
     for i, r in enumerate(filtered, start=1):
         r["Rank"] = i
 
-    # Build DataFrame with exact column order; drop internal _ keys
-    df = pd.DataFrame([{c: r.get(c, "") for c in _COL_ORDER} for r in filtered])
+    # -------------------------------------------------------------------
+    # SECTION 1 — AI Shortlist
+    # -------------------------------------------------------------------
+    shortlist = st.session_state.get("shortlist_articles", [])
+    shortlist_urls = {r.get("Link") for r in shortlist}
 
-    styled = df.style.apply(_style_report_type, subset=["Report Type"])
+    st.subheader(f"AI Shortlist ({len(shortlist)} articles)")
+    if shortlist:
+        df_short = pd.DataFrame([{c: r.get(c, "") for c in _COL_ORDER} for r in shortlist])
+        styled_short = df_short.style.apply(_style_report_type, subset=["Report Type"])
+        st.dataframe(
+            styled_short,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "Score":    st.column_config.NumberColumn("Score", format="%.1f"),
+                "Headline": st.column_config.TextColumn("Headline", width="medium"),
+                "Summary":  st.column_config.TextColumn("Summary",  width="medium"),
+                "Link":     st.column_config.LinkColumn("Link", display_text="Read"),
+            },
+        )
+    else:
+        st.caption("No articles above shortlist threshold yet. Promote articles below to train your shortlist.")
 
-    st.dataframe(
-        styled,
-        width="stretch",
-        hide_index=True,
-        column_config={
-            "Score":    st.column_config.NumberColumn("Score", format="%.1f"),
-            "Headline": st.column_config.TextColumn("Headline", width="medium"),
-            "Summary":  st.column_config.TextColumn("Summary",  width="medium"),
-            "Link":     st.column_config.LinkColumn("Link", display_text="Read"),
-        },
-    )
     st.divider()
-    st.download_button(
-        label="Download PDF Report",
-        data=st.session_state.pdf_buffer,
-        file_name=st.session_state.pdf_filename,
-        mime="application/pdf",
-        type="secondary",
-    )
 
+    # -------------------------------------------------------------------
+    # SECTION 2 — Read All button + non-shortlist articles
+    # -------------------------------------------------------------------
+    non_shortlist = [r for r in filtered if r.get("Link") not in shortlist_urls]
+
+    if st.button(f"Read All \u2014 {total_political} articles scanned"):
+        st.session_state.show_all_articles = not st.session_state.get("show_all_articles", False)
+
+    if st.session_state.get("show_all_articles", False):
+        st.subheader("All Scanned Articles \u2014 not in shortlist")
+        if non_shortlist:
+            editor_rows = [{**{c: r.get(c, "") for c in _COL_ORDER}, "selected": False}
+                           for r in non_shortlist]
+            edit_df = pd.DataFrame(editor_rows)[["selected"] + _COL_ORDER]
+
+            edited = st.data_editor(
+                edit_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "selected": st.column_config.CheckboxColumn("Add?", default=False),
+                    "Score":    st.column_config.NumberColumn("Score", format="%.1f"),
+                    "Headline": st.column_config.TextColumn("Headline", width="medium"),
+                    "Summary":  st.column_config.TextColumn("Summary",  width="medium"),
+                    "Link":     st.column_config.LinkColumn("Link", display_text="Read"),
+                },
+            )
+
+            if st.button("Add to Shortlist"):
+                selected_links = set(edited.loc[edited["selected"] == True, "Link"].tolist())
+                count = 0
+                for row in non_shortlist:
+                    if row.get("Link") in selected_links:
+                        article = {
+                            "url":                   row.get("Link", ""),
+                            "headline":              row.get("Headline", ""),
+                            "primary_tag":           row.get("Tag", ""),
+                            "final_score":           row.get("Score", 0),
+                            "source_name":           row.get("Sources", ""),
+                            "affects_client_region": row.get("Region", "-") == "\u2713",
+                        }
+                        record_promotion(st.session_state.user_email, article)
+                        if row not in st.session_state.shortlist_articles:
+                            st.session_state.shortlist_articles.append(row)
+                        count += 1
+                if count > 0:
+                    st.success(f"{count} articles added to your shortlist.")
+                    st.rerun()
+        else:
+            st.caption("All scanned articles are already in your shortlist.")
+
+    st.divider()
+
+    # -------------------------------------------------------------------
+    # Export to PDF
+    # -------------------------------------------------------------------
+    shortlist_for_pdf = st.session_state.get("shortlist_articles", [])
+    region_label      = st.session_state.get("region_label", "")
+    email             = st.session_state.user_email
+
+    if shortlist_for_pdf:
+        pdf_bytes = bytes(generate_pdf_shortlist(shortlist_for_pdf, region_label, email))
+        safe_region = region_label.replace(", ", "_").replace(" ", "_").replace("(", "").replace(")", "")
+        filename = f"PolitiScan_{safe_region}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        st.download_button(
+            label=f"Export to PDF ({len(shortlist_for_pdf)} articles)",
+            data=pdf_bytes,
+            file_name=filename,
+            mime="application/pdf",
+            type="secondary",
+        )
+    else:
+        st.button("Export to PDF", disabled=True)
+
+
+# ---------------------------------------------------------------------------
+# Sidebar
+# ---------------------------------------------------------------------------
 
 with st.sidebar:
     st.header("Scan Parameters")
@@ -625,10 +803,23 @@ with st.sidebar:
         default=["All Outlets"],
         placeholder="Select outlets to filter...",
     )
-    # "All Outlets" in selection (or nothing selected) means no outlet filter
     active_outlets = [o for o in selected_outlets if o != "All Outlets"]
 
     scan_clicked = st.button("Scan News", type="primary", use_container_width=True)
+
+    # Learning status badge
+    try:
+        profile_status = get_profile_status(st.session_state.user_email)
+        if profile_status["status"] == "collecting":
+            days_active = profile_status.get("days_active", 0)
+            st.info(
+                f"**Learning Mode \u2014 Day {days_active} of 30**\n\n"
+                "Promote missed articles below to train your shortlist."
+            )
+        else:
+            st.success("**Your Personal Profile is Active**")
+    except Exception:
+        pass
 
     # Tag filter + Story Sources — only shown when results are available
     if "results_rows" in st.session_state and st.session_state.results_rows:
@@ -667,18 +858,23 @@ with st.sidebar:
                         st.markdown(f"- {src}")
 
 
+# ---------------------------------------------------------------------------
+# Scan logic
+# ---------------------------------------------------------------------------
+
 if scan_clicked:
     # Clear previous results so a fresh scan always re-runs fully
     for key in ("results_rows", "results_caption", "pdf_buffer", "pdf_filename",
-                "selected_tags", "selected_report_types", "source_breakdown"):
+                "selected_tags", "selected_report_types", "source_breakdown",
+                "shortlist_articles", "show_all_articles"):
         st.session_state.pop(key, None)
 
     api_key      = os.getenv("ANTHROPIC_API_KEY", "")
     region_label = f"{district}, {state}" + (f" ({zone})" if zone.strip() else "")
+    st.session_state.region_label = region_label
 
-    nd_api_key   = os.getenv("NEWSDATA_API_KEY", "")
-    rss_result   = [None, None]  # [entries, scope]
-    nd_result    = [[]]          # [dicts]
+    rss_result = [None, None]
+    nd_result  = [[]]
 
     def _rss_worker():
         entries, scope_val = fetch_all_feeds(district, state, active_outlets)
@@ -739,15 +935,17 @@ if scan_clicked:
             article_dicts = deduplicate_all(article_dicts, api_key=api_key)
         post_dedup_count = len(article_dicts)
 
-        # Run rank_articles in a background thread and animate a progress bar
-        # over an estimated 60 seconds while it works.
+        # Capture profile before thread starts
+        _client_profile = st.session_state.get("client_profile")
+
         rank_result = [None]
         rank_exc    = [None]
 
         def _rank_worker():
             try:
                 rank_result[0] = rank_articles(
-                    article_dicts, state=state, district=district, api_key=api_key
+                    article_dicts, state=state, district=district,
+                    api_key=api_key, client_profile=_client_profile,
                 )
             except Exception as e:
                 rank_exc[0] = e
@@ -756,7 +954,7 @@ if scan_clicked:
         rank_thread.start()
 
         ESTIMATE_SECS = 60
-        TICK          = 0.25          # seconds between UI updates
+        TICK          = 0.25
         steps         = int(ESTIMATE_SECS / TICK)
         rank_bar      = st.progress(0, text="Analysing article content and ranking by importance... 0% complete")
 
@@ -764,7 +962,7 @@ if scan_clicked:
             if not rank_thread.is_alive():
                 break
             time.sleep(TICK)
-            pct = min(int(step / steps * 99), 99)   # cap at 99% until truly done
+            pct = min(int(step / steps * 99), 99)
             rank_bar.progress(pct / 100, text=f"Analysing article content and ranking by importance... {pct}% complete")
 
         rank_thread.join()
@@ -777,8 +975,7 @@ if scan_clicked:
 
         ranked = rank_result[0] or []
 
-        non_political = total_fetched - len(ranked)
-        scope_note    = f" (state-level results for {state})" if scope == "state" else ""
+        scope_note = f" (state-level results for {state})" if scope == "state" else ""
 
         _api_keys    = {"anthropic": api_key, "sarvam": os.getenv("SARVAM_API_KEY", "")}
         progress_bar = st.progress(0, text=f"Summarising article 0 of {len(ranked)}...")
@@ -793,7 +990,6 @@ if scan_clicked:
         progress_bar.empty()
         status_text.empty()
 
-        # Build display rows — ALL ranked articles with real summaries
         summarized_map = {
             a["url"]: {
                 "summary":     a.get("Summary", ""),
@@ -802,6 +998,7 @@ if scan_clicked:
             }
             for a in summarized
         }
+
         rows = []
         for i, art in enumerate(ranked, start=1):
             sc              = art.get("source_count", 1)
@@ -813,11 +1010,14 @@ if scan_clicked:
             summary_text    = sm.get("summary", "")
             if source_type == "failed":
                 summary_text = "[Manual Review Required]  " + summary_text
+
+            client_adj = art.get("client_adjusted_score", art.get("final_score", 0))
+
             rows.append({
                 "Rank":        i,
-                "Score":       round(art.get("final_score", 0), 1),
+                "Score":       round(client_adj, 1),
                 "Tag":         art.get("primary_tag", ""),
-                "Region":      "✓" if art.get("affects_client_region") else "-",
+                "Region":      "\u2713" if art.get("affects_client_region") else "-",
                 "Report Type": report_type,
                 "Signals":     signals_str,
                 "Headline":    art.get("headline", ""),
@@ -825,32 +1025,30 @@ if scan_clicked:
                 "Language":    sm.get("language", "English"),
                 "Summary":     summary_text,
                 "Link":        art.get("url", ""),
-                # internal keys for sidebar expander, PDF, and report-type filter
-                "_source_count": sc,
-                "_sources_list": art.get("sources_list", [art.get("source_name", "Unknown")]),
-                "_report_type":  report_type,
-                "_signals":      signals_str,
+                # internal keys
+                "_source_count":          sc,
+                "_sources_list":          art.get("sources_list", [art.get("source_name", "Unknown")]),
+                "_report_type":           report_type,
+                "_signals":               signals_str,
+                "_client_adjusted_score": client_adj,
+                "_profile_boosted":       art.get("profile_boosted", False),
             })
 
-        with st.spinner("Generating PDF..."):
-            pdf_bytes = bytes(generate_pdf(rows[:15], region_label))
+        # Initialise shortlist: score >= 7.0, capped at 15
+        st.session_state.shortlist_articles = [
+            r for r in rows if r.get("_client_adjusted_score", 0) >= 7.0
+        ][:15]
 
         dupes_merged = pre_dedup_count - post_dedup_count
         caption = (
             f"**{len(rows)} unique stories** from **{len(ranked)} political articles**{scope_note}.  "
             f"{dupes_merged} duplicates merged.  "
-            f"{total_fetched} articles total - {nd_count} from NewsData.io, {rss_total} from Google RSS.  "
-            f"PDF contains top 15."
+            f"{total_fetched} articles total - {nd_count} from NewsData.io, {rss_total} from Google RSS."
         )
 
         st.session_state.results_rows    = rows
         st.session_state.results_caption = caption
-        st.session_state.pdf_buffer      = pdf_bytes
-        st.session_state.pdf_filename    = (
-            f"PolitiScan_{district}_{state}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
-        )
         _show_results()
 
 elif "results_rows" in st.session_state:
-    # Rerun from download click or tag filter change — restore without rescanning
     _show_results()

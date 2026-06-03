@@ -2,57 +2,31 @@ YOUTUBE_CHANNELS = {
     "English": {
         "NDTV": "UCZFMm1mMw0F81Z37aaEzTUA",
         "India Today": "UCYPvAwZP8pZhSMW8qs7cVCw",
-        "Republic TV": "UCrBSYA7NNMsKFSCTdm4bw9A",
+        "Aaj Tak English": "UCt4t-jeY85JegMLZ-E5UWtA",
         "Wion": "UCuDt-bSbFMLH2KJ9bGr1YoA",
-        "News18 India": "UC8NHpFBGBjGEf2RFcGaz2nw",
-        "Times Now": "UC5wkFQVGFLMDHUZXFsWiS0w",
+        "Times Now": "UC5wkFQVGFLMDHUZXFsWiS0w"
     },
     "Hindi": {
-        "Aaj Tak": "UCt4t-jeY85JegMlZ-E5UWtA",
-        "ABP News": "UC1b2BDzCOZIClzmtKJNGXYQ",
-        "Zee News": "UCIvnNGrMz4k8Vo2FYD7RJCQ",
+        "Aaj Tak": "UCt4t-jeY85JegMLZ-E5UWtA",
         "Lallantop": "UCx8Z14PpntdaxCt2hakbQLQ",
-        "India TV": "UCrQd4fORZlNmL-hEJJetoqA",
-        "NDTV India": "UCBi2mrWuNuyYy4gbM6vU10Q",
+        "NDTV India": "UCIsr2XUVQpFCUpFMVIxHmJw"
     },
     "Kannada": {
-        "TV9 Kannada": "UCR_EX3WBCjYSwLGFHPbKHng",
-        "Public TV": "UCvNjYS3lsEMgJxAkpZdUvhg",
-        "Asianet Suvarna News": "UCeNDGhPxUr8vat0MDLYm7JQ",
-        "Zee Kannada News": "UCMuVBku30KG5BIUNKHYaGww",
+        "Suvarna News": "UCeNDGhPxUr8vat0MDLYm7JQ"
     },
     "Tamil": {
-        "Puthiya Thalaimurai": "UC1GBdEAvlzWIhvTTCx_JrNg",
-        "Polimer News": "UC9RIaRusmL8XouvGPiJpFiw",
-        "Sun News": "UCBHMbH3iEEDPjj2b_Rh30Mg",
-        "Kalaignar TV": "UCr5N8JNVQrMaJQZ5Gm_OD5g",
-        "News18 Tamil Nadu": "UC5bxFWOWVoVZ8eMKh2bHgEw",
+        "Puthiya Thalaimurai": "UC8NuZFSFYhPCMJBkGJNjUCQ"
     },
     "Telugu": {
-        "TV9 Telugu": "UCsefnSR49QzXYsVJGJDFQcA",
-        "ABN Andhra Jyothi": "UCGHcaRHaKnqFGN_lSJy44Eg",
-        "NTV Telugu": "UC5Xk0tkUxFmHGxrSwUOAkDQ",
-        "Sakshi TV": "UCm7mXGLbGHOnhVjU8nUWJhQ",
-        "TV5 News": "UCkR4KmAqE6OYTW88v02QBOA",
+        "TV9 Telugu": "UCsefnSR49QzXYsVJGJDFQcA"
     },
     "Malayalam": {
-        "Asianet News": "UCwyNpUvFBGE3W1OmV7EJf_g",
-        "Mathrubhumi News": "UCozMzKSXl5RV5xWpxJiB2cA",
-        "Reporter TV": "UCdXv-8JLz1XF5NiCkmfkDng",
-        "Manorama News": "UCxQ5I7WZGjDSGSrXFeFijpg",
-        "Janam TV": "UC_IFLKfzVHRoQIWCflrMbqg",
+        "Asianet News": "UCwyNpUvFBGE3W1OmV7EJf_g"
     },
     "Marathi": {
-        "ABP Majha": "UCrr7y8MkXy1NtDLHfQkBcmg",
-        "TV9 Marathi": "UCdqHKbkBsFnFMWxiBIxu8Ug",
-        "Zee 24 Taas": "UCSnFTDmqsrMQDvTGCF89b8Q",
-        "Lokmat Times": "UCdPy7fCe3oWVBzJK7p7Xbzg",
-        "News18 Lokmat": "UCkviSrN4LMbVZpKRdaXF7pg",
+        "ABP Majha": "UCrr7y8MkXy1NtDLHfQkBcmg"
     },
     "Bengali": {
-        "ABP Ananda": "UCqomxSEBnVbJlEQS7BLXIVQ",
-        "Zee 24 Ghanta": "UCQ7VRIgVGnJ0RrfDDlbXXcA",
-        "News18 Bangla": "UCGqHjMBWBPoJP_YpKZrEBFQ",
-        "Calcutta News": "UCb9uJSCdDPAFe-OFpEUVkzA",
-    },
+        "ABP Ananda": "UCqomxSEBnVbJlEQS7BLXIVQ"
+    }
 }

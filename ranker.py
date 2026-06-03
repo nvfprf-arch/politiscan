@@ -12,6 +12,31 @@ from scorer import score_importance, get_source_tier
 SOURCE_TIER_SCORES = {"tier1": 10, "tier2": 7, "tier3": 4}
 
 
+def apply_client_profile(base_score: float, article: dict, client_profile: dict | None) -> float:
+    """Adjust base_score using a client profile. Returns base_score if profile is None."""
+    if client_profile is None:
+        return base_score
+
+    score = base_score
+
+    primary_tag = article.get("primary_tag")
+    if primary_tag and primary_tag in client_profile.get("preferred_tags", []):
+        multiplier = client_profile.get("tag_multipliers", {}).get(primary_tag, 1.2)
+        score *= multiplier
+
+    source_name = article.get("source_name")
+    if source_name and source_name in client_profile.get("preferred_sources", []):
+        multiplier = client_profile.get("source_multipliers", {}).get(source_name, 1.15)
+        score *= multiplier
+
+    if article.get("affects_client_region"):
+        boost = client_profile.get("region_weight_boost", 1.0)
+        if boost > 1.0:
+            score *= boost
+
+    return round(min(score, 10.0), 2)
+
+
 def calculate_recency_score(published_iso: str) -> float:
     """Return a 0-10 recency score based on hours since publication."""
     try:
@@ -85,6 +110,7 @@ def rank_articles(
     state: str,
     district: str,
     api_key: str,
+    client_profile: dict | None = None,
 ) -> list:
     """Classify, score, and rank a list of article dicts.
 
@@ -107,9 +133,14 @@ def rank_articles(
             if processed % 10 == 0:
                 print(f"  [ranker] processed {processed}/{len(articles_list)} articles...")
             if result is not None:
+                original = result["final_score"]
+                adjusted = apply_client_profile(original, result, client_profile)
+                result["original_final_score"] = original
+                result["client_adjusted_score"] = adjusted
+                result["profile_boosted"] = (adjusted - original) > 0.5
                 results.append(result)
 
-    results.sort(key=lambda x: x["final_score"], reverse=True)
+    results.sort(key=lambda x: x["client_adjusted_score"], reverse=True)
     return results
 
 
@@ -162,6 +193,7 @@ def rank_videos(
     state: str,
     district: str,
     api_key: str,
+    client_profile: dict | None = None,
 ) -> list:
     """Classify, score, and rank a list of video dicts.
 
@@ -185,10 +217,15 @@ def rank_videos(
             if processed % 10 == 0:
                 print(f"  [ranker] processed {processed}/{len(videos_list)} videos...")
             if result is not None:
+                original = result["final_score"]
+                adjusted = apply_client_profile(original, result, client_profile)
+                result["original_final_score"] = original
+                result["client_adjusted_score"] = adjusted
+                result["profile_boosted"] = (adjusted - original) > 0.5
                 results.append(result)
 
     print(f"[ranker] videos scored: {len(results)}")
-    results.sort(key=lambda x: x["final_score"], reverse=True)
+    results.sort(key=lambda x: x["client_adjusted_score"], reverse=True)
     print(f"[ranker] returning {len(results)} results")
     return results
 
