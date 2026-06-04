@@ -8,6 +8,10 @@ import difflib
 
 import streamlit as st
 import pandas as pd
+
+if not st.session_state.get("logged_in"):
+    st.warning("Please log in from the main app page.")
+    st.stop()
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -27,6 +27,8 @@ from translation import process_article
 from pdf_handler import fetch_article_content
 from feedback_store import record_promotion, get_profile_status, should_generate_profile
 from profile_analyzer import check_and_refresh_profile, load_client_profile
+from allowed_users import ALLOWED_EMAILS
+from auth import generate_otp, send_otp_email, verify_otp
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -616,12 +618,50 @@ def _truncate_signals(signals: list, max_len: int = 80) -> str:
 # ---------------------------------------------------------------------------
 
 st.set_page_config(page_title="PolitiScan", page_icon="\U0001f5f3\ufe0f", layout="wide")
+
+# ---------------------------------------------------------------------------
+# Login gate
+# ---------------------------------------------------------------------------
+if not st.session_state.get("logged_in"):
+    st.title("PolitiScan")
+    st.subheader("Political Intelligence Dashboard")
+
+    if not st.session_state.get("otp_sent"):
+        email = st.text_input("Email address", key="login_email_input")
+        if st.button("Send OTP", type="primary"):
+            if email not in ALLOWED_EMAILS:
+                st.error("Access denied. Contact your administrator.")
+            else:
+                otp = generate_otp()
+                st.session_state.otp           = otp
+                st.session_state.otp_timestamp = datetime.now()
+                st.session_state.login_email   = email
+                if send_otp_email(email, otp):
+                    st.session_state.otp_sent = True
+                    st.rerun()
+                else:
+                    st.error("Failed to send OTP. Check your email address and try again.")
+    else:
+        st.success(f"OTP sent to {st.session_state.login_email}. Enter the 6-digit code below.")
+        code = st.text_input("6-digit code", max_chars=6, key="otp_input")
+        if st.button("Verify", type="primary"):
+            if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
+                st.session_state.logged_in  = True
+                st.session_state.user_email = st.session_state.login_email
+                # Clear login state
+                for k in ("otp", "otp_timestamp", "otp_sent", "login_email"):
+                    st.session_state.pop(k, None)
+                st.rerun()
+            else:
+                st.error("Invalid or expired code. Please try again.")
+
+    st.stop()
+
+# ---------------------------------------------------------------------------
+# App title (shown only when logged in)
+# ---------------------------------------------------------------------------
 st.title("PolitiScan")
 st.markdown("#### Political Intelligence Dashboard")
-
-# Session state: user email (hardcoded until V2 login)
-if "user_email" not in st.session_state:
-    st.session_state.user_email = "test@politiscan.in"
 
 # Load/refresh client profile once per session
 if "profile_loaded" not in st.session_state:
@@ -791,6 +831,12 @@ def _show_results():
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
+    st.caption(f"Logged in as **{st.session_state.user_email}**")
+    if st.button("Logout", use_container_width=True):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+    st.divider()
     st.header("Scan Parameters")
     state    = st.selectbox("State / UT", sorted(REGIONS.keys()))
     district = st.selectbox("District", REGIONS[state])
