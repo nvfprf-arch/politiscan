@@ -122,7 +122,7 @@ def rank_articles(
     results = []
     processed = 0
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ThreadPoolExecutor(max_workers=30) as executor:
         futures = {
             executor.submit(_process_article, art, state, district, api_key): art
             for art in articles_list
@@ -206,7 +206,7 @@ def rank_videos(
     results = []
     processed = 0
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ThreadPoolExecutor(max_workers=30) as executor:
         futures = {
             executor.submit(_process_video, vid, state, district, api_key): vid
             for vid in videos_list

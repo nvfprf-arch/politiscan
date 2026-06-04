@@ -13,6 +13,9 @@ from io import BytesIO
 from dotenv import load_dotenv
 load_dotenv()
 
+# SET TO FALSE BEFORE DEPLOYING
+DEV_MODE = False
+
 import streamlit as st
 import feedparser
 import anthropic
@@ -83,10 +86,12 @@ def _run_feeds(queries: list[str]) -> list:
     return combined
 
 
-def fetch_all_feeds(district: str, state: str, selected_outlets: list | None = None) -> tuple[list, str]:
+@st.cache_data(ttl=1800)
+def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> tuple[list, str]:
     """Fetch news with district+state queries, falling back to state-only if needed.
     When selected_outlets is provided, also runs 4 site-filtered queries per outlet.
     Returns (combined_entries, scope_used) where scope_used is 'district' or 'state'.
+    Cached for 30 minutes per district/state/outlets combination.
     """
     location = f"{district} {state}"
     queries = _build_queries(location)
@@ -301,9 +306,11 @@ def deduplicate_dicts(articles: list, threshold: float = 0.70) -> list:
     return unique
 
 
+@st.cache_data(ttl=1800)
 def fetch_newsdata_primary(district: str, state: str, api_key: str) -> list:
     """Fetch recent articles from NewsData.io as primary news source.
     Returns a list of ranker-compatible dicts with source_channel='newsdata'.
+    Cached for 30 minutes per district/state combination.
     """
     if not api_key:
         return []
@@ -398,7 +405,7 @@ def summarize_all(
             "_source_type": source_type,
         }
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {executor.submit(_process, i, a): i for i, a in enumerate(ranked_articles)}
         for future in as_completed(futures):
             i, row = future.result()
@@ -622,6 +629,10 @@ st.set_page_config(page_title="PolitiScan", page_icon="\U0001f5f3\ufe0f", layout
 # ---------------------------------------------------------------------------
 # Login gate
 # ---------------------------------------------------------------------------
+if DEV_MODE:
+    st.session_state.logged_in  = True
+    st.session_state.user_email = "test@politiscan.in"
+
 if not st.session_state.get("logged_in"):
     st.title("PolitiScan")
     st.subheader("Political Intelligence Dashboard")
@@ -923,7 +934,7 @@ if scan_clicked:
     nd_result  = [[]]
 
     def _rss_worker():
-        entries, scope_val = fetch_all_feeds(district, state, active_outlets)
+        entries, scope_val = fetch_all_feeds(district, state, tuple(active_outlets))
         rss_result[0] = entries
         rss_result[1] = scope_val
 

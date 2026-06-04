@@ -5,6 +5,7 @@ import os
 import json
 import anthropic
 import streamlit as st
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from sentence_transformers import SentenceTransformer, util
 
 
@@ -90,28 +91,27 @@ def deduplicate_by_embedding(items: list, threshold: float = 0.85) -> list:
 def deduplicate_by_claude(items: list, api_key: str, batch_size: int = 20) -> list:
     """Use Claude to find articles covering the same specific political event.
 
-    Processes items in batches.  Within each identified group keeps the
-    highest-scored (or first) item and merges source names from removed items.
+    All batches are sent to Claude concurrently (max_workers=5).  The merge
+    step runs sequentially afterwards to avoid shared-state race conditions.
     """
     if not items:
         return []
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Track which indices have been absorbed into another item
-    absorbed = set()
-    # Map original index -> mutable copy we will return
-    result_items = [dict(item) for item in items]
+    # Build batch index lists upfront
+    all_batches = [
+        list(range(batch_start, min(batch_start + batch_size, len(items))))
+        for batch_start in range(0, len(items), batch_size)
+    ]
 
-    for batch_start in range(0, len(items), batch_size):
-        batch_indices = list(range(batch_start, min(batch_start + batch_size, len(items))))
-        batch_items   = [items[i] for i in batch_indices]
-
+    def _call_batch(batch_indices: list) -> tuple[list, list]:
+        """Call Claude for one batch. Returns (batch_indices, groups)."""
+        batch_items = [items[i] for i in batch_indices]
         numbered = "\n".join(
             f"{n + 1}. {item.get('headline', '')}"
             for n, item in enumerate(batch_items)
         )
-
         prompt = (
             "You are deduplicating political news headlines. "
             "Identify groups that cover the SAME SPECIFIC POLITICAL EVENT, not just the same topic. "
@@ -123,7 +123,6 @@ def deduplicate_by_claude(items: list, api_key: str, batch_size: int = 20) -> li
             'If none found return {"groups": []}. '
             f"Headlines:\n{numbered}"
         )
-
         try:
             message = client.messages.create(
                 model="claude-haiku-4-5-20251001",
@@ -132,8 +131,8 @@ def deduplicate_by_claude(items: list, api_key: str, batch_size: int = 20) -> li
             )
             raw = message.content[0].text.strip()
         except Exception as e:
-            print(f"Warning: Claude API error on batch starting {batch_start}: {e}")
-            continue
+            print(f"Warning: Claude API error on batch starting {batch_indices[0]}: {e}")
+            return batch_indices, []
 
         # Strip markdown code fences
         if raw.startswith("```"):
@@ -143,27 +142,40 @@ def deduplicate_by_claude(items: list, api_key: str, batch_size: int = 20) -> li
             raw = raw.strip()
 
         try:
-            data = json.loads(raw)
-            groups = data.get("groups", [])
+            groups = json.loads(raw).get("groups", [])
         except (json.JSONDecodeError, AttributeError):
-            print(f"Warning: JSON parse failed for batch starting {batch_start}. Skipping.")
-            continue
+            print(f"Warning: JSON parse failed for batch starting {batch_indices[0]}. Skipping.")
+            return batch_indices, []
 
+        return batch_indices, groups
+
+    # Run all batches concurrently
+    batch_results: list[tuple[list, list]] = []
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(_call_batch, bi): bi for bi in all_batches}
+        for future in as_completed(futures):
+            batch_results.append(future.result())
+
+    # Sort by batch start index for deterministic merge order
+    batch_results.sort(key=lambda x: x[0][0] if x[0] else 0)
+
+    # Apply merge logic sequentially (mutates shared absorbed / result_items)
+    absorbed = set()
+    result_items = [dict(item) for item in items]
+
+    for batch_indices, groups in batch_results:
         for group in groups:
-            # group contains 1-based positions within this batch
             global_indices = []
             for pos in group:
-                gi = batch_indices[pos - 1]   # convert to global index
+                gi = batch_indices[pos - 1]
                 if gi not in absorbed:
                     global_indices.append(gi)
 
             if len(global_indices) < 2:
                 continue
 
-            cluster = [result_items[gi] for gi in global_indices]
             best_gi = max(global_indices, key=lambda gi: result_items[gi].get("final_score", 0))
 
-            # Merge sources from all cluster members into the best item
             existing = set(result_items[best_gi].get("sources_list", []))
             for gi in global_indices:
                 if gi != best_gi:
@@ -175,8 +187,8 @@ def deduplicate_by_claude(items: list, api_key: str, batch_size: int = 20) -> li
                             existing.add(s)
                     absorbed.add(gi)
 
-            result_items[best_gi]["sources_list"]  = list(existing)
-            result_items[best_gi]["source_count"]  = len(existing)
+            result_items[best_gi]["sources_list"] = list(existing)
+            result_items[best_gi]["source_count"] = len(existing)
 
     return [result_items[i] for i in range(len(items)) if i not in absorbed]
 
