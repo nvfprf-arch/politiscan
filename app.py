@@ -631,7 +631,7 @@ st.set_page_config(page_title="PolitiScan", page_icon="\U0001f5f3\ufe0f", layout
 # ---------------------------------------------------------------------------
 if DEV_MODE:
     st.session_state.logged_in  = True
-    st.session_state.user_email = "test@politiscan.in"
+    st.session_state.user_email = "dev@test.com"
 
 if not st.session_state.get("logged_in"):
     st.title("PolitiScan")
