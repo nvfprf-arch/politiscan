@@ -8,3 +8,4 @@ newspaper3k
 pdfplumber
 pdf2image
 pytesseract
+sentence-transformers
