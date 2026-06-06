@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # SET TO FALSE BEFORE DEPLOYING
-DEV_MODE = False
+DEV_MODE = True
 
 import streamlit as st
 import feedparser
