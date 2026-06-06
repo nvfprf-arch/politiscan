@@ -9,3 +9,5 @@ pdfplumber
 pdf2image
 pytesseract
 sentence-transformers
+youtube-transcript-api
+google-api-python-client
