@@ -29,6 +29,7 @@ def send_otp_email(to_email: str, otp: str) -> tuple[bool, str]:
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type":  "application/json",
+            "User-Agent":    "PolitiScan/1.0",
         },
         method="POST",
     )
