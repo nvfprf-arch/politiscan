@@ -2,7 +2,6 @@ import os
 import json
 import random
 import datetime
-import ssl
 import urllib.request
 import urllib.error
 
@@ -33,11 +32,8 @@ def send_otp_email(to_email: str, otp: str) -> tuple[bool, str]:
         },
         method="POST",
     )
-    ssl_ctx = ssl.create_default_context()
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
     try:
-        with urllib.request.urlopen(req, timeout=10, context=ssl_ctx) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             body = resp.read().decode("utf-8")
             print(f"[auth] Resend raw response: status={resp.status} body={body}")
             return (True, "") if resp.status in (200, 201) else (False, f"status {resp.status}: {body}")
