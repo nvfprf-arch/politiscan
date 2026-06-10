@@ -12,21 +12,21 @@ YOUTUBE_CHANNELS = {
         "NDTV India": "UCIsr2XUVQpFCUpFMVIxHmJw"
     },
     "Kannada": {
-        "Suvarna News": "UCeNDGhPxUr8vat0MDLYm7JQ"
+        "Suvarna News": "UCjElJyiXmQXnWmceQ1JyKrA"
     },
     "Tamil": {
-        "Puthiya Thalaimurai": "UC8NuZFSFYhPCMJBkGJNjUCQ"
+        "Puthiya Thalaimurai": "UCmyKnNRH0wH-r8I-ceP-dsg"
     },
     "Telugu": {
-        "TV9 Telugu": "UCsefnSR49QzXYsVJGJDFQcA"
+        "TV9 Telugu": "UCPXTXMecYqnRKNdqdVOGSFg"
     },
     "Malayalam": {
-        "Asianet News": "UCwyNpUvFBGE3W1OmV7EJf_g"
+        "Asianet News": "UCf8w5m0YsRa8MHQ5bwSGmbw"
     },
     "Marathi": {
-        "ABP Majha": "UCrr7y8MkXy1NtDLHfQkBcmg"
+        "ABP Majha": "UCH7nv1A9xIrAifZJNvt7cgA"
     },
     "Bengali": {
-        "ABP Ananda": "UCqomxSEBnVbJlEQS7BLXIVQ"
+        "ABP Ananda": "UCv3rFzn-GHGtqzXiaq3sWNg"
     }
 }
