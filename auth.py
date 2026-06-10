@@ -19,8 +19,10 @@ def send_otp_email(to_email: str, otp: str) -> tuple[bool, str]:
     api_key = os.getenv("RESEND_API_KEY", "").strip()
     if not api_key:
         return False, "RESEND_API_KEY is not set."
+    print(f"[auth] api_key prefix: '{api_key[:8]}'")
 
     from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev").strip()
+    print(f"[auth] from_email resolved to: '{from_email}'")
     payload = json.dumps({
         "from":    from_email,
         "to":      [to_email],
