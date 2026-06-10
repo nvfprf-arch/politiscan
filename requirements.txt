@@ -8,6 +8,7 @@ newspaper3k
 pdfplumber
 pdf2image
 pytesseract
-sentence-transformers
+sentence-transformers==2.2.2
+torch==2.0.1+cpu --find-links https://download.pytorch.org/whl/torch_stable.html
 youtube-transcript-api
 google-api-python-client
