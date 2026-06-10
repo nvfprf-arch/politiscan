@@ -647,8 +647,6 @@ if not st.session_state.get("logged_in"):
                 st.session_state.otp           = otp
                 st.session_state.otp_timestamp = datetime.now()
                 st.session_state.login_email   = email
-                st.write(f"KEY: {os.getenv('RESEND_API_KEY', 'MISSING')[:12]}...")
-                st.write(f"FROM: {os.getenv('RESEND_FROM_EMAIL', 'MISSING')}")
                 sent, send_err = send_otp_email(email, otp)
                 if sent:
                     st.session_state.otp_sent = True
