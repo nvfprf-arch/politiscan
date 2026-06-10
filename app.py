@@ -647,11 +647,12 @@ if not st.session_state.get("logged_in"):
                 st.session_state.otp           = otp
                 st.session_state.otp_timestamp = datetime.now()
                 st.session_state.login_email   = email
-                if send_otp_email(email, otp):
+                sent, send_err = send_otp_email(email, otp)
+                if sent:
                     st.session_state.otp_sent = True
                     st.rerun()
                 else:
-                    st.error("Failed to send OTP. Check your email address and try again.")
+                    st.error(f"Failed to send OTP: {send_err}")
     else:
         st.success(f"OTP sent to {st.session_state.login_email}. Enter the 6-digit code below.")
         code = st.text_input("6-digit code", max_chars=6, key="otp_input")

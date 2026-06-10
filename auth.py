@@ -4,6 +4,7 @@ import random
 import datetime
 import ssl
 import urllib.request
+import urllib.error
 
 
 def generate_otp() -> str:
@@ -11,13 +12,13 @@ def generate_otp() -> str:
     return f"{random.randint(0, 999999):06d}"
 
 
-def send_otp_email(to_email: str, otp: str) -> bool:
+def send_otp_email(to_email: str, otp: str) -> tuple[bool, str]:
     """Send the OTP to to_email via the Resend API.
-    Returns True on success, False on any error.
+    Returns (True, "") on success, (False, error_message) on any error.
     """
     api_key = os.getenv("RESEND_API_KEY", "").strip()
     if not api_key:
-        return False
+        return False, "RESEND_API_KEY is not set."
 
     from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev").strip()
     payload = json.dumps({
@@ -48,10 +49,22 @@ def send_otp_email(to_email: str, otp: str) -> bool:
     ssl_ctx.verify_mode = ssl.CERT_NONE
     try:
         with urllib.request.urlopen(req, timeout=10, context=ssl_ctx) as resp:
-            return resp.status in (200, 201)
+            body = resp.read().decode("utf-8")
+            print(f"[auth] Resend response: status={resp.status} body={body}")
+            if resp.status in (200, 201):
+                return True, ""
+            err = f"Resend returned status {resp.status}: {body}"
+            print(f"[auth] send_otp_email failed: {err}")
+            return False, err
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8")
+        err = f"Resend HTTP {e.code}: {body}"
+        print(f"[auth] send_otp_email failed: {err}")
+        return False, err
     except Exception as e:
-        print(f"[auth] send_otp_email failed: {e}")
-        return False
+        err = str(e)
+        print(f"[auth] send_otp_email failed: {err}")
+        return False, err
 
 
 def verify_otp(entered: str, stored: str, timestamp: datetime.datetime) -> bool:
