@@ -13,25 +13,15 @@ def generate_otp() -> str:
 
 
 def send_otp_email(to_email: str, otp: str) -> tuple[bool, str]:
-    """Send the OTP to to_email via the Resend API.
-    Returns (True, "") on success, (False, error_message) on any error.
-    """
+    """DEBUG VERSION - prints raw Resend response."""
     api_key = os.getenv("RESEND_API_KEY", "").strip()
-    if not api_key:
-        return False, "RESEND_API_KEY is not set."
-    print(f"[auth] api_key prefix: '{api_key[:8]}'")
+    print(f"[auth] api_key present: {bool(api_key)}, prefix: '{api_key[:8]}'")
 
-    from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev").strip()
-    print(f"[auth] from_email resolved to: '{from_email}'")
     payload = json.dumps({
-        "from":    from_email,
+        "from":    "noreply@politiscan.in",
         "to":      [to_email],
-        "subject": "PolitiScan - Your Login Code",
-        "text": (
-            f"Your PolitiScan login code is: {otp}\n\n"
-            "This code expires in 10 minutes.\n\n"
-            "If you did not request this code, please ignore this email."
-        ),
+        "subject": "PolitiScan OTP Test",
+        "text":    f"Your PolitiScan OTP is: {otp}",
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -43,30 +33,21 @@ def send_otp_email(to_email: str, otp: str) -> tuple[bool, str]:
         },
         method="POST",
     )
-    # Disable SSL certificate verification to work around Norton Antivirus
-    # SSL/TLS inspection, which replaces server certs with its own self-signed
-    # cert that no public CA bundle can verify.
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.check_hostname = False
     ssl_ctx.verify_mode = ssl.CERT_NONE
     try:
         with urllib.request.urlopen(req, timeout=10, context=ssl_ctx) as resp:
             body = resp.read().decode("utf-8")
-            print(f"[auth] Resend response: status={resp.status} body={body}")
-            if resp.status in (200, 201):
-                return True, ""
-            err = f"Resend returned status {resp.status}: {body}"
-            print(f"[auth] send_otp_email failed: {err}")
-            return False, err
+            print(f"[auth] Resend raw response: status={resp.status} body={body}")
+            return (True, "") if resp.status in (200, 201) else (False, f"status {resp.status}: {body}")
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8")
-        err = f"Resend HTTP {e.code}: {body}"
-        print(f"[auth] send_otp_email failed: {err}")
-        return False, err
+        print(f"[auth] Resend raw response: HTTP {e.code} body={body}")
+        return False, f"HTTP {e.code}: {body}"
     except Exception as e:
-        err = str(e)
-        print(f"[auth] send_otp_email failed: {err}")
-        return False, err
+        print(f"[auth] send_otp_email exception: {e}")
+        return False, str(e)
 
 
 def verify_otp(entered: str, stored: str, timestamp: datetime.datetime) -> bool:
