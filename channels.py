@@ -16,10 +16,10 @@ YOUTUBE_CHANNELS = {
         "India TV": "UCHs5GHSBhSFyNlBxe2FXoqA"
     },
     "Kannada": {
-        "TV9 Kannada": "UCgelFxEJHCNGcEaosHSuMgw",
+        "TV9 Kannada": "UC8dnBi4WUErqYQHZ4PfsLTg",
         "Suvarna News": "UCjElJyiXmQXnWmceQ1JyKrA",
-        "Public TV": "UCBbAlBLhzlEJKxBCnAFEPqg",
-        "Zee Kannada News": "UC1s7M_zfBEkDPSFAWblGOXg"
+        "Public TV": "UCl-OodciBGZ0k8K8rBZGe4w",
+        "Zee Kannada News": "UCUSY2EZK7_2_1-wsZVbdzsQ"
     },
     "Tamil": {
         "Puthiya Thalaimurai": "UCmyKnNRH0wH-r8I-ceP-dsg",
