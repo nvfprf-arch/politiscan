@@ -19,8 +19,9 @@ def send_otp_email(to_email: str, otp: str) -> bool:
     if not api_key:
         return False
 
+    from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev").strip()
     payload = json.dumps({
-        "from":    "onboarding@resend.dev",
+        "from":    from_email,
         "to":      [to_email],
         "subject": "PolitiScan - Your Login Code",
         "text": (
