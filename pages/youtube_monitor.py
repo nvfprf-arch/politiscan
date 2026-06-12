@@ -338,7 +338,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
         for rank_idx, v in enumerate(display_results, 1):
             rows.append({
                 "Rank": rank_idx,
-                "Score": round(v.get("final_score", 0), 2),
+                "Score": round(v.get("final_score", 0), 1),
                 "Tag": v.get("primary_tag", ""),
                 "Trending": "🔥" if v.get("engagement_velocity_score", 0) > 7 else "",
                 "Title": v.get("title", ""),
@@ -426,7 +426,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
         pdf.ln(6)
 
         for rank_idx, v in enumerate(display_results, 1):
-            score = round(v.get("final_score", 0), 2)
+            score = round(v.get("final_score", 0), 1)
             evs = v.get("engagement_velocity_score", 0)
             tag = _safe(v.get("primary_tag", ""))
             title = _safe(v.get("title", ""))
