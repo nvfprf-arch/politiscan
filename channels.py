@@ -35,9 +35,10 @@ YOUTUBE_CHANNELS = {
     },
     "Malayalam": {
         "Asianet News": "UCf8w5m0YsRa8MHQ5bwSGmbw",
-        "Mathrubhumi News": "UCrqBWXlIaaDFBfJTlcZWFbg",
-        "Manorama News": "UCt_tCFgGhGLJ8LBVVNBKZHA",
-        "Reporter TV": "UCK9bH0WA9sZPBNjJRfBfAbQ"
+        "Manorama News": "UCP0uG-mcMImgKnJz-VjJZmQ",
+        "Reporter Live": "UCFx1nseXKTc1Culiu3neeSQ",
+        "Mathrubhumi News": "UCwXrBBZnIh2ER4lal6WbAHw",
+        "24 News": "UCup3etEdjyF1L3sRbU-rKLw"
     },
     "Marathi": {
         "ABP Majha": "UCH7nv1A9xIrAifZJNvt7cgA",
