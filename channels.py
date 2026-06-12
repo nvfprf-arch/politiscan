@@ -16,9 +16,9 @@ YOUTUBE_CHANNELS = {
         "India TV": "UCHs5GHSBhSFyNlBxe2FXoqA"
     },
     "Kannada": {
-        "TV9 Kannada": "UC8dnBi4WUErqYQHZ4PfsLTg",
-        "Suvarna News": "UCjElJyiXmQXnWmceQ1JyKrA",
-        "Public TV": "UCl-OodciBGZ0k8K8rBZGe4w",
+        "TV9 Kannada": "UCK9eVqJG07tpuQEadDlnwJw",
+        "Asianet Suvarna News": "UCeNDGhPxUr8vat0MDLYm7JQ",
+        "Public TV": "UCN3Zjx1L9SQK48cRE7PK5Pw",
         "Zee Kannada News": "UCUSY2EZK7_2_1-wsZVbdzsQ"
     },
     "Tamil": {
