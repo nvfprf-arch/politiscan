@@ -20,10 +20,11 @@ YOUTUBE_CHANNELS = {
         "Zee Kannada News": "UCUSY2EZK7_2_1-wsZVbdzsQ"
     },
     "Tamil": {
+        "Polimer News": "UC8Z-VjXBtDJTvq6aqkIskPg",
+        "News18 Tamil Nadu": "UCat88i6_rELqI_prwvjspRA",
         "Puthiya Thalaimurai": "UCmyKnNRH0wH-r8I-ceP-dsg",
-        "Polimer News": "UCFkE2GzDLBQbkJfKL_9QXCA",
-        "Sun News": "UCfEBFCHgkQzVFHtSfg3-n9A",
-        "News18 Tamil Nadu": "UCaFj6GCaBt4-h2HLWrLJDxA"
+        "Sathiyam News": "UC2ziCMHFPWkFHjocUMXT__Q",
+        "Thanthi TV": "UC-JFyL0zDFOsPMpuWu39rPA"
     },
     "Telugu": {
         "TV9 Telugu": "UCPXTXMecYqnRKNdqdVOGSFg",
