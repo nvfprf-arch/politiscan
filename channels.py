@@ -27,10 +27,11 @@ YOUTUBE_CHANNELS = {
         "Thanthi TV": "UC-JFyL0zDFOsPMpuWu39rPA"
     },
     "Telugu": {
+        "Sakshi TV": "UCZ9m4KOh8Ei60428xeGYDCQ",
         "TV9 Telugu": "UCPXTXMecYqnRKNdqdVOGSFg",
-        "ABN Andhra Jyothi": "UCqMGQA8sBplSMjI_BV9N0Xg",
-        "NTV Telugu": "UCRPNSNWCOtGDKJYGhVCiXLg",
-        "Sakshi TV": "UCAnPMaKFQtJkwIcDi8GRBIQ"
+        "NTV Telugu": "UCumtYpCY26F6Jr3satUgMvA",
+        "ABN Telugu": "UC_2irx_BQR7RsBKmUV9fePQ",
+        "HMTV Telugu": "UCNZOrs1QBt8cJnv9ud96qRA"
     },
     "Malayalam": {
         "Asianet News": "UCf8w5m0YsRa8MHQ5bwSGmbw",
