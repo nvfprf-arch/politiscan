@@ -41,9 +41,10 @@ YOUTUBE_CHANNELS = {
         "24 News": "UCup3etEdjyF1L3sRbU-rKLw"
     },
     "Marathi": {
-        "ABP Majha": "UCH7nv1A9xIrAifZJNvt7cgA",
-        "TV9 Marathi": "UCsxjBAjjZVNYFuFsJFNtc8A",
-        "Zee 24 Taas": "UCNGILDdMb9HhpBVJyFbRxKA"
+        "Zee 24 Taas": "UCVbsFo8aCgvIRIO9RYwsQMA",
+        "TV9 Marathi": "UCdOSeEq9Cs2Pco7OCn2_i5w",
+        "News18 Marathi": "UCrcpw88HvKJ0skdsHniCJtQ",
+        "ABP Majha": "UCH7nv1A9xIrAifZJNvt7cgA"
     },
     "Bengali": {
         "ABP Ananda": "UCv3rFzn-GHGtqzXiaq3sWNg",
