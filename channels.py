@@ -1,11 +1,11 @@
 YOUTUBE_CHANNELS = {
     "English": {
-        "NDTV": "UCZFMm1mMw0F81Z37aaEzTUA",
         "India Today": "UCYPvAwZP8pZhSMW8qs7cVCw",
-        "Republic TV": "UCIHUFordHlSb9f3ZuXWcs8g",
-        "Wion": "UCuDt-bSbFMLH2KJ9bGr1YoA",
-        "Times Now": "UC5wkFQVGFLMDHUZXFsWiS0w",
-        "News18 India": "UCv3QkHMiKPKd_Gt3EZktgkA"
+        "NDTV": "UCZFMm1mMw0F81Z37aaEzTUA",
+        "Wion": "UC_gUM8rL-Lrg6O3adPW9K1g",
+        "Republic World": "UCwqusr8YDwM-3mEYTDeJHzw",
+        "Times Now": "UC6RJ7-PaXg6TIH2BzZfTV7w",
+        "CNN News18": "UCef1-8eOpJgud7szVPlZQAQ"
     },
     "Hindi": {
         "Aaj Tak": "UCt4t-jeY85JegMlZ-E5UWtA",
