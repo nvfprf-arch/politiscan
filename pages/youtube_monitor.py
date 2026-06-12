@@ -340,7 +340,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
                 "Rank": rank_idx,
                 "Score": round(v.get("final_score", 0), 1),
                 "Tag": v.get("primary_tag", ""),
-                "Trending": "🔥" if v.get("engagement_velocity_score", 0) > 7 else "",
+                "Velocity": "Viral" if v.get("engagement_velocity_score", 0) > 7 else "Rising" if v.get("engagement_velocity_score", 0) >= 5 else "Active" if v.get("engagement_velocity_score", 0) >= 3 else "",
                 "Title": v.get("title", ""),
                 "Channel": v.get("channel_name", ""),
                 "Views/hr": int(v.get("views_per_hour", 0)),
@@ -437,7 +437,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             url = v.get("youtube_url", "")
             t_status = v.get("transcript_status", "")
             report_type = v.get("report_type", "CONFIRMED")
-            trending_label = "  [TRENDING]" if evs > 7 else ""
+            trending_label = "  [VIRAL]" if evs > 7 else "  [RISING]" if evs >= 5 else "  [ACTIVE]" if evs >= 3 else ""
 
             pdf.set_fill_color(235, 235, 245)
             pdf.set_draw_color(180, 180, 180)
