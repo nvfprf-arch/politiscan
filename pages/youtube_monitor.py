@@ -346,7 +346,6 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
                 "Views/hr": int(v.get("views_per_hour", 0)),
                 "Upload Time": v.get("published_at", "")[:16].replace("T", " "),
                 "Summary": re.sub(r'^\*\*Summary[:\s]*\*\*\s*', '', v.get("summary", "").removeprefix("## Summary").removeprefix("## ")).lstrip(),
-                "Transcript Status": v.get("transcript_status", ""),
                 "Report Type": v.get("report_type", "CONFIRMED"),
                 "Signals": _truncate_signals(v.get("speculation_signals", [])),
                 "YouTube Link": v.get("youtube_url", ""),
