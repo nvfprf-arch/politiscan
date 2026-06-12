@@ -9,11 +9,9 @@ YOUTUBE_CHANNELS = {
     },
     "Hindi": {
         "Aaj Tak": "UCt4t-jeY85JegMlZ-E5UWtA",
-        "ABP News": "UCqEIBPi_7bnLFEQZpGdyG3g",
-        "Zee News": "UCFKcqq3E_xAjHMv8VEMPbhQ",
-        "Lallantop": "UCx8Z14PpntdaxCt2hakbQLQ",
-        "NDTV India": "UCIsr2XUVQpFCUpFMVIxHmJw",
-        "India TV": "UCHs5GHSBhSFyNlBxe2FXoqA"
+        "News18 India": "UCPP3etACgdUWvizcES1dJ8Q",
+        "Zee News": "UCIvaYmXn910QMdemBG3v1pQ",
+        "NDTV India": "UC9CYT9gSNLevX5ey2_6CK0Q"
     },
     "Kannada": {
         "TV9 Kannada": "UCK9eVqJG07tpuQEadDlnwJw",
