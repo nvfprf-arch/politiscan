@@ -47,8 +47,10 @@ YOUTUBE_CHANNELS = {
         "ABP Majha": "UCH7nv1A9xIrAifZJNvt7cgA"
     },
     "Bengali": {
-        "ABP Ananda": "UCv3rFzn-GHGtqzXiaq3sWNg",
-        "Zee 24 Ghanta": "UCgMFq7DvYFhHzdNbNJmFkeg",
-        "News18 Bangla": "UCxHoBXkY88Tb8z2NNQB_aPQ"
+        "Zee 24 Ghanta": "UCdF5Q5QVbYstYrTfpgUl0ZA",
+        "News18 Bangla": "UCbf0XHULBkTfv2hBjaaDw9Q",
+        "ATN Bangla News": "UCbgcYEdMsuypG2NJ-znBp3w",
+        "Republic Bangla": "UCajVjEHDoVn_AHsunUZz_EQ",
+        "TV9 Bangla": "UCHCR4UFsGwd_VcDa0-a4haw"
     }
 }
