@@ -390,7 +390,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
                 "Rank": rank_idx,
                 "Score": round(v.get("final_score", 0), 2),
                 "Tag": v.get("primary_tag", ""),
-                "Relevance": "Viral" if v.get("engagement_velocity_score", 0) > 7 else "Rising" if v.get("engagement_velocity_score", 0) >= 5 else "Active" if v.get("engagement_velocity_score", 0) >= 3 else "",
+                "Relevance": "Viral" if v.get("engagement_velocity_score", 0) >= 2 else "Rising" if v.get("engagement_velocity_score", 0) >= 0.5 else "Active" if v.get("engagement_velocity_score", 0) >= 0.1 else "",
                 "Title": v.get("title", ""),
                 "Channel": v.get("channel_name", ""),
                 "Views/hr": int(v.get("views_per_hour", 0)),
