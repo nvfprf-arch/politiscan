@@ -150,7 +150,7 @@ with st.sidebar:
         index=2,
     )
 
-    keyword = st.text_input("Filter by Keyword (optional)")
+    keyword = st.text_input("Filter by Keyword (optional)", key="yt_keyword")
 
     scan_button = st.button("Scan and Rank", type="primary", use_container_width=True)
 
@@ -364,14 +364,6 @@ if scan_button:
 
     print(f"[YT] Step 8 done: summaries complete")
 
-    # Step 9: Keyword filter
-    if keyword.strip():
-        kw = keyword.strip().lower()
-        ranked = [
-            v for v in ranked
-            if kw in v["title"].lower() or kw in v.get("summary", "").lower()
-        ]
-
     status_box.empty()
 
     st.session_state["yt_results"] = ranked
@@ -379,7 +371,6 @@ if scan_button:
         "total_fetched": total_fetched,
         "non_political_removed": non_political_count,
         "political_ranked": len(ranked),
-        "keyword": keyword.strip(),
         "language": language,
         "selected_channels": selected_channels,
         "time_period": time_period,
@@ -426,16 +417,25 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             if _relevance_label(v.get("views_per_hour", 0)) in relevance_filter
         ]
 
+    # Live keyword filter
+    _kw = st.session_state.get("yt_keyword", "").strip()
+    if _kw:
+        _kw_lower = _kw.lower()
+        display_results = [
+            v for v in display_results
+            if _kw_lower in v.get("title", "").lower() or _kw_lower in v.get("summary", "").lower()
+        ]
+
     # Stats summary line
     stats_md = (
         f"**Total fetched:** {meta['total_fetched']} &nbsp;|&nbsp; "
         f"**Non-political removed:** {meta['non_political_removed']} &nbsp;|&nbsp; "
         f"**Political ranked:** {meta['political_ranked']}"
     )
-    if meta.get("keyword"):
+    if _kw:
         stats_md += (
             f" &nbsp;|&nbsp; **Filtered to:** {len(display_results)} "
-            f"matching `{meta['keyword']}`"
+            f"matching `{_kw}`"
         )
     st.markdown(stats_md)
 
