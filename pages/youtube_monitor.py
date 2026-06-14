@@ -417,23 +417,27 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             .apply(_style_report_type, subset=["Report Type"])
         )
 
-        display_df = df[["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"]].copy()
-        table_height = len(display_df) * 80 + 40
-
-        st.data_editor(
-            display_df,
+        st.dataframe(
+            styled,
             column_config={
                 "Score": st.column_config.NumberColumn("Score", format="%.2f"),
                 "YouTube Link": st.column_config.LinkColumn("YouTube Link", display_text="Watch"),
                 "Title": st.column_config.TextColumn("Title", width="large"),
                 "Summary": st.column_config.TextColumn("Summary", width="large"),
             },
+            column_order=["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"],
             hide_index=True,
-            disabled=True,
-            num_rows="fixed",
-            height=table_height,
             use_container_width=True,
         )
+
+        st.subheader("Read Full Summaries")
+        for rank_idx, v in enumerate(display_results, 1):
+            full_summary = re.sub(r'^\*\*Summary[:\s]*\*\*\s*', '', v.get("summary", "").removeprefix("## Summary").removeprefix("## ")).lstrip()
+            with st.expander(f"#{rank_idx} — {v.get('title', '')}"):
+                st.markdown(f"**Title:** {v.get('title', '')}")
+                st.markdown(f"**Channel:** {v.get('channel_name', '')} &nbsp;|&nbsp; **Report Type:** {v.get('report_type', '')} &nbsp;|&nbsp; **Score:** {round(v.get('final_score', 0), 2)}")
+                st.markdown("**Summary:**")
+                st.write(full_summary)
 
     # ── PDF Report ────────────────────────────────────────────────────────────
     st.divider()
