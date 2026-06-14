@@ -738,6 +738,8 @@ def _show_results():
     # SECTION 1 — AI Shortlist
     # -------------------------------------------------------------------
     shortlist = st.session_state.get("shortlist_articles", [])
+    if selected_type and selected_type != "All Report Types":
+        shortlist = [r for r in shortlist if r.get("_report_type", "CONFIRMED") == selected_type]
     shortlist_urls = {r.get("Link") for r in shortlist}
 
     st.subheader(f"AI Shortlist ({len(shortlist)} articles)")
@@ -774,9 +776,10 @@ def _show_results():
             editor_rows = [{**{c: r.get(c, "") for c in _COL_ORDER}, "selected": False}
                            for r in non_shortlist]
             edit_df = pd.DataFrame(editor_rows)[["selected"] + _COL_ORDER]
+            edit_df_styled = edit_df.style.apply(_style_report_type, subset=["Report Type"])
 
             edited = st.data_editor(
-                edit_df,
+                edit_df_styled,
                 hide_index=True,
                 use_container_width=True,
                 column_config={
