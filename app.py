@@ -634,14 +634,105 @@ if DEV_MODE:
     st.session_state.user_email = "dev@test.com"
 
 if not st.session_state.get("logged_in"):
-    st.markdown('<style>[data-testid="stSidebarNav"], [data-testid="stSidebarNavItems"], section[data-testid="stSidebar"] ul, .st-emotion-cache-1cypcdb, nav[data-testid="stSidebarNav"] {display: none !important;}</style>', unsafe_allow_html=True)
-    st.markdown('<style>section[data-testid="stSidebar"] {display: none !important;}</style>', unsafe_allow_html=True)
-    st.title("PolitiScan")
-    st.subheader("Political Intelligence Dashboard")
+    # Hide sidebar entirely on login page
+    st.markdown(
+        '<style>'
+        '[data-testid="stSidebarNav"], [data-testid="stSidebarNavItems"],'
+        'section[data-testid="stSidebar"] ul, .st-emotion-cache-1cypcdb,'
+        'nav[data-testid="stSidebarNav"], section[data-testid="stSidebar"] {display: none !important;}'
+        # Dark page background
+        '.stApp { background-color: #0a0a0a !important; }'
+        # Hide the default Streamlit top decoration
+        'header[data-testid="stHeader"] { background: transparent !important; }'
+        # Centre the login card
+        '.login-outer { display:flex; justify-content:center; align-items:center; min-height:85vh; padding:2rem; }'
+        # Card shell — cream paper, double border trick
+        '.login-card { background:#f4efe3; width:100%; max-width:420px; border:1.5px solid #1a1a1a; border-radius:2px; }'
+        '.login-card-inner { border:0.5px solid #b0a080; margin:5px; padding:2rem 1.75rem 1.5rem; }'
+        # Rules
+        '.np-rule-thick { height:3px; background:#1a1a1a; margin-bottom:3px; }'
+        '.np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.75rem; }'
+        # Masthead
+        '.np-masthead { font-family:"Georgia","Times New Roman",serif; font-size:42px; font-weight:700;'
+        '  color:#1a1a1a; text-align:center; line-height:1; margin-bottom:0.5rem; letter-spacing:0.02em; }'
+        # Meta dateline
+        '.np-meta { display:flex; align-items:center; gap:6px; margin-bottom:1rem; }'
+        '.np-meta-rule { flex:1; height:0.5px; background:#b0a080; }'
+        '.np-meta-text { font-family:"Georgia","Times New Roman",serif; font-size:9px;'
+        '  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a; white-space:nowrap; }'
+        # Double rule divider
+        '.np-divider { border:none; border-top:2.5px double #1a1a1a; margin:0 0 1.25rem 0; }'
+        # Subheading
+        '.np-subhead { font-family:"Georgia","Times New Roman",serif; font-size:12.5px;'
+        '  font-style:italic; color:#4a3e28; text-align:center; margin-bottom:1.5rem; }'
+        # Field label
+        '.np-label { font-family:"Georgia","Times New Roman",serif; font-size:9px;'
+        '  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a;'
+        '  display:block; margin-bottom:4px; }'
+        # Override Streamlit input styling inside the card
+        '.login-card .stTextInput input {'
+        '  background:transparent !important; border:none !important;'
+        '  border-bottom:1.5px solid #1a1a1a !important; border-radius:0 !important;'
+        '  font-family:"Georgia","Times New Roman",serif !important; font-size:14px !important;'
+        '  color:#1a1a1a !important; padding:6px 0 !important; box-shadow:none !important; }'
+        '.login-card .stTextInput input::placeholder { color:#b0a080 !important; font-style:italic; }'
+        # Override Streamlit primary button inside the card
+        '.login-card .stButton > button[kind="primary"] {'
+        '  width:100% !important; background:#1a1a1a !important; color:#f4efe3 !important;'
+        '  border:none !important; border-radius:0 !important; padding:11px 0 !important;'
+        '  font-family:"Georgia","Times New Roman",serif !important; font-size:10.5px !important;'
+        '  letter-spacing:0.18em !important; text-transform:uppercase !important; }'
+        '.login-card .stButton > button[kind="primary"]:hover { background:#3a3020 !important; }'
+        # Secondary button (Verify)
+        '.login-card .stButton > button[kind="secondary"] {'
+        '  width:100% !important; background:transparent !important; color:#1a1a1a !important;'
+        '  border:1.5px solid #1a1a1a !important; border-radius:0 !important; padding:10px 0 !important;'
+        '  font-family:"Georgia","Times New Roman",serif !important; font-size:10.5px !important;'
+        '  letter-spacing:0.18em !important; text-transform:uppercase !important; }'
+        '.login-card .stButton > button[kind="secondary"]:hover {'
+        '  background:#1a1a1a !important; color:#f4efe3 !important; }'
+        # Divider between email and OTP sections
+        '.np-section-divider { border:none; border-top:1px solid #c8b898; margin:1.25rem 0; }'
+        # OTP note
+        '.np-otp-note { font-family:"Georgia","Times New Roman",serif; font-size:11.5px;'
+        '  font-style:italic; color:#7a6a4a; text-align:center; margin-bottom:1rem; }'
+        # Resend link styled as small italic text
+        '.np-resend { font-family:"Georgia","Times New Roman",serif; font-size:10px;'
+        '  font-style:italic; color:#7a6a4a; text-align:center; margin-top:0.5rem; }'
+        # Footer line
+        '.np-footer { font-family:"Georgia","Times New Roman",serif; font-size:8px;'
+        '  letter-spacing:0.1em; text-transform:uppercase; color:#b0a080;'
+        '  text-align:center; margin-top:1.5rem; padding-top:0.75rem; border-top:0.5px solid #c8b898; }'
+        # Error/success overrides to match card palette
+        '.login-card .stAlert { border-radius:0 !important; }'
+        '</style>',
+        unsafe_allow_html=True,
+    )
+
+    # Build the date string for the dateline
+    today_str = datetime.now().strftime("%A, %-d %B %Y")
+
+    st.markdown('<div class="login-outer"><div class="login-card"><div class="login-card-inner">', unsafe_allow_html=True)
+
+    # Masthead block
+    st.markdown(f'''
+        <div class="np-rule-thick"></div>
+        <div class="np-rule-thin"></div>
+        <div class="np-masthead">PolitiScan</div>
+        <div class="np-meta">
+            <div class="np-meta-rule"></div>
+            <div class="np-meta-text">Bengaluru &middot; {today_str}</div>
+            <div class="np-meta-rule"></div>
+        </div>
+        <hr class="np-divider">
+        <div class="np-subhead">Enter your email to receive today's intelligence dispatch</div>
+    ''', unsafe_allow_html=True)
 
     if not st.session_state.get("otp_sent"):
-        email = st.text_input("Email address", key="login_email_input")
-        if st.button("Send OTP", type="primary"):
+        st.markdown('<div class="np-label">Email Address</div>', unsafe_allow_html=True)
+        email = st.text_input("Email Address", key="login_email_input", label_visibility="collapsed",
+                              placeholder="you@example.com")
+        if st.button("Send Verification Code", type="primary", key="send_otp_btn"):
             if email not in ALLOWED_EMAILS:
                 st.error("Access denied. Contact your administrator.")
             else:
@@ -656,18 +747,43 @@ if not st.session_state.get("logged_in"):
                 else:
                     st.error(f"Failed to send OTP: {send_err}")
     else:
-        st.success(f"OTP sent to {st.session_state.login_email}. Enter the 6-digit code below.")
-        code = st.text_input("6-digit code", max_chars=6, key="otp_input")
-        if st.button("Verify", type="primary"):
+        st.markdown('<div class="np-label">Email Address</div>', unsafe_allow_html=True)
+        st.text_input("Email Address", value=st.session_state.login_email,
+                      key="login_email_display", label_visibility="collapsed", disabled=True)
+
+        st.markdown('<hr class="np-section-divider">', unsafe_allow_html=True)
+        st.markdown(f'<div class="np-otp-note">Code sent to {st.session_state.login_email} — enter the 6 digits below</div>',
+                    unsafe_allow_html=True)
+
+        st.markdown('<div class="np-label">Verification Code</div>', unsafe_allow_html=True)
+        code = st.text_input("Verification Code", max_chars=6, key="otp_input",
+                             label_visibility="collapsed", placeholder="······")
+
+        if st.button("Verify & Enter", type="secondary", key="verify_btn"):
             if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
                 st.session_state.logged_in  = True
                 st.session_state.user_email = st.session_state.login_email
-                # Clear login state
                 for k in ("otp", "otp_timestamp", "otp_sent", "login_email"):
                     st.session_state.pop(k, None)
                 st.rerun()
             else:
                 st.error("Invalid or expired code. Please try again.")
+
+        st.markdown('<div class="np-resend">', unsafe_allow_html=True)
+        if st.button("Resend code", type="primary", key="resend_btn"):
+            otp = generate_otp()
+            st.session_state.otp           = otp
+            st.session_state.otp_timestamp = datetime.now()
+            sent, send_err = send_otp_email(st.session_state.login_email, otp)
+            if sent:
+                st.success("New code sent.")
+            else:
+                st.error(f"Failed to resend: {send_err}")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="np-footer">For authorised personnel only &middot; PolitiScan Intelligence</div>',
+                unsafe_allow_html=True)
+    st.markdown('</div></div></div>', unsafe_allow_html=True)
 
     st.stop()
 
