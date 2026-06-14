@@ -785,7 +785,7 @@ if not st.session_state.get("logged_in"):
         line-height:1.1;margin-bottom:4px;min-height:30px;
     }}
     .ps-cursor {{
-        display:inline-block;width:2px;height:0.85em;
+        display:none;width:2px;height:0.85em;
         background:#0d0d0f;margin-left:2px;vertical-align:text-bottom;
         animation:psBlink 0.75s step-end infinite;
     }}
@@ -854,6 +854,7 @@ if not st.session_state.get("logged_in"):
         const el  = document.getElementById('ps-tw');
         const cur = document.getElementById('ps-cur');
         if (!el) {{ setTimeout(psTypewriter, 150); return; }}
+        if (cur) cur.style.display = 'inline-block';
         let i = 0;
         (function type() {{
             if (i <= greeting.length) {{
@@ -892,29 +893,32 @@ if not st.session_state.get("logged_in"):
 
     <div class="ps-card">
       <div class="ps-banner">
-        <span>Political Intelligence · {_edition}</span>
+        <span>Political Intelligence &middot; {_edition}</span>
         <span>{_today}</span>
       </div>
       <div class="ps-masthead">
         <div class="ps-masthead-title">PolitiScan</div>
         <hr class="ps-masthead-rule"/>
-        <div class="ps-masthead-sub">Secure Access · Authorised Correspondents Only</div>
+        <div class="ps-masthead-sub">Secure Access &middot; Authorised Correspondents Only</div>
       </div>
       <div class="ps-body">
         <div class="ps-tag">Correspondent Access</div>
-        <div class="ps-edition">{_edition} ·</div>
+        <div class="ps-edition">{_edition} &middot;</div>
         <div class="ps-hed"><span id="ps-tw"></span><span id="ps-cur" class="ps-cursor"></span></div>
         <div class="ps-deck">Sign in to access your political intelligence dashboard. For authorised correspondents only.</div>
-        {_error_html}
-        {_info_html}
-        {_form_html}
-      </div>
-      <div class="ps-foot">
-        <span>🔒 Secure · Authorised users only</span>
-        <span>v4.0</span>
-      </div>
-    </div>
     """, unsafe_allow_html=True)
+
+    # Form HTML injected separately so f-string doesn't escape angle brackets
+    st.markdown(
+        _error_html + _info_html + _form_html +
+        '</div>'
+        '<div class="ps-foot">'
+        '<span>&#128274; Secure &middot; Authorised users only</span>'
+        '<span>v4.0</span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     st.stop()
 
