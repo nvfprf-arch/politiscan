@@ -634,7 +634,8 @@ if DEV_MODE:
     st.session_state.user_email = "dev@test.com"
 
 if not st.session_state.get("logged_in"):
-    # ── Edition + greeting by time of day (Python side) ──────────────────────
+
+    # ── Edition + greeting by time of day ────────────────────────────────────
     _hour = datetime.now().hour
     if 5 <= _hour < 12:
         _edition  = "Morning Edition"
@@ -651,287 +652,267 @@ if not st.session_state.get("logged_in"):
 
     _today = datetime.now().strftime("%d %b %Y").upper()
 
+    # ── Handle form submissions via query params ──────────────────────────────
+    _params = st.query_params
+    _action = _params.get("ps_action", "")
+    _qemail = _params.get("ps_email", "")
+    _qcode  = _params.get("ps_code", "")
+
+    _login_error = ""
+    _login_info  = ""
+
+    if _action == "send_otp" and _qemail:
+        st.query_params.clear()
+        if _qemail not in ALLOWED_EMAILS:
+            _login_error = "Access denied. Contact your administrator."
+        else:
+            _otp = generate_otp()
+            st.session_state.otp           = _otp
+            st.session_state.otp_timestamp = datetime.now()
+            st.session_state.login_email   = _qemail
+            _sent, _err = send_otp_email(_qemail, _otp)
+            if _sent:
+                st.session_state.otp_sent = True
+                st.rerun()
+            else:
+                _login_error = f"Failed to send code: {_err}"
+
+    elif _action == "verify" and _qcode:
+        st.query_params.clear()
+        if verify_otp(_qcode, st.session_state.get("otp",""), st.session_state.get("otp_timestamp", datetime.now())):
+            st.session_state.logged_in  = True
+            st.session_state.user_email = st.session_state.get("login_email","")
+            for k in ("otp","otp_timestamp","otp_sent","login_email"):
+                st.session_state.pop(k, None)
+            st.rerun()
+        else:
+            _login_error = "Invalid or expired code. Please try again."
+
+    elif _action == "resend":
+        st.query_params.clear()
+        _otp = generate_otp()
+        st.session_state.otp           = _otp
+        st.session_state.otp_timestamp = datetime.now()
+        _sent, _err = send_otp_email(st.session_state.get("login_email",""), _otp)
+        _login_info = "New code sent." if _sent else f"Failed to resend: {_err}"
+
+    # ── Build error/info HTML ─────────────────────────────────────────────────
+    _error_html = f'<div class="ps-error">{_login_error}</div>' if _login_error else ""
+    _info_html  = f'<div class="ps-info">{_login_info}</div>'   if _login_info  else ""
+
+    # ── OTP vs email step ─────────────────────────────────────────────────────
+    _otp_sent    = st.session_state.get("otp_sent", False)
+    _login_email = st.session_state.get("login_email", "")
+
+    if _otp_sent:
+        _form_html = f"""
+        <div class="ps-otp-notice">🕐 &nbsp; Code dispatched to {_login_email} · expires in 10 min</div>
+        <div class="ps-col-rule"></div>
+        <label class="ps-label">6-digit code</label>
+        <input class="ps-inp" id="ps-code-inp" type="text" maxlength="6"
+               placeholder="······" autocomplete="one-time-code"
+               style="letter-spacing:6px;text-align:center;font-size:15px;" />
+        <button class="ps-btn-primary" onclick="psVerify()">Verify and sign in →</button>
+        <button class="ps-btn-secondary" onclick="psResend()">Resend code</button>
+        """
+    else:
+        _form_html = f"""
+        <label class="ps-label">Work email</label>
+        <input class="ps-inp" id="ps-email-inp" type="email"
+               placeholder="you@consultancy.com" autocomplete="email" />
+        <button class="ps-btn-primary" onclick="psSendOtp()">Send one-time code →</button>
+        """
+
     st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap');
 
-    [data-testid='stSidebarNav'] {{display: none;}}
-    [data-testid='stSidebar'] {{display: none;}}
-    header {{display: none;}}
-    #MainMenu {{display: none;}}
-    footer {{display: none;}}
-
-    .stApp {{ background: #060607 !important; }}
-    html, body {{ background: #060607 !important; }}
-
+    [data-testid='stSidebarNav'] {{display:none;}}
+    [data-testid='stSidebar']    {{display:none;}}
+    header {{display:none;}}
+    #MainMenu {{display:none;}}
+    footer {{display:none;}}
+    .stApp {{background:#060607 !important;}}
+    html,body {{background:#060607 !important;}}
     .block-container {{
-        padding: 0 !important;
-        max-width: 100% !important;
-        min-height: 100vh !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: center !important;
+        padding:1rem !important;
+        max-width:100% !important;
+        min-height:100vh !important;
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
     }}
 
-    [data-testid="stHorizontalBlock"] {{
-        align-items: center !important;
-        min-height: 100vh !important;
-        padding: 2rem 0 !important;
+    /* ── Card ── */
+    .ps-card {{
+        width:400px;
+        background:#f5f1e8;
+        border:1px solid #c8c0a8;
+        border-radius:2px;
+        overflow:hidden;
+        box-shadow:0 0 0 5px #0d0d0f, 0 0 0 5.5px #1e1e22;
+        margin:0 auto;
     }}
-
-    /* ── Newspaper card column ── */
-    [data-testid="stHorizontalBlock"] > div:nth-child(2) {{
-        background: #f5f1e8 !important;
-        border: 1px solid #c8c0a8 !important;
-        border-radius: 2px !important;
-        padding: 0 !important;
-        overflow: hidden !important;
-        box-shadow: 0 0 0 5px #0d0d0f, 0 0 0 5.5px #1e1e22 !important;
+    .ps-banner {{
+        background:#0d0d0f; padding:8px 20px;
+        display:flex; justify-content:space-between;
     }}
-
-    /* ── Black top banner ── */
-    .ps-top-banner {{
-        background: #0d0d0f;
-        padding: 8px 20px 7px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }}
-    .ps-banner-label {{
-        font-size: 7px; color: #606060;
-        letter-spacing: 1.5px; text-transform: uppercase; font-family: sans-serif;
-    }}
-    .ps-banner-date {{
-        font-size: 7px; color: #505050;
-        font-family: sans-serif; letter-spacing: 0.5px;
-    }}
-
-    /* ── Masthead ── */
-    .ps-masthead {{
-        padding: 10px 20px 0;
-        background: #f5f1e8;
-        border-bottom: 3px double #1a1a1a;
-    }}
+    .ps-banner span {{font-size:7px;color:#606060;letter-spacing:1.5px;text-transform:uppercase;font-family:sans-serif;}}
+    .ps-masthead {{padding:10px 20px 0;border-bottom:3px double #1a1a1a;}}
     .ps-masthead-title {{
-        font-size: 34px; color: #0d0d0f;
-        letter-spacing: 5px;
-        font-family: 'IM Fell English', Georgia, serif;
-        text-align: center; line-height: 1; margin-bottom: 3px;
+        font-size:34px;color:#0d0d0f;letter-spacing:5px;
+        font-family:'IM Fell English',Georgia,serif;
+        text-align:center;line-height:1;margin-bottom:3px;
     }}
-    .ps-masthead-rule {{ border: none; border-top: 0.5px solid #aaa; margin: 3px 0 0; }}
+    .ps-masthead-rule {{border:none;border-top:0.5px solid #aaa;margin:3px 0 0;}}
     .ps-masthead-sub {{
-        font-size: 7px; color: #777; text-align: center;
-        letter-spacing: 2px; text-transform: uppercase;
-        padding: 3px 0 7px; font-family: sans-serif;
+        font-size:7px;color:#777;text-align:center;
+        letter-spacing:2px;text-transform:uppercase;
+        padding:3px 0 7px;font-family:sans-serif;
     }}
-
-    /* ── Body padding ── */
-    .ps-card-body {{ padding: 14px 20px 12px; }}
-
-    /* ── Edition + typewriter headline ── */
-    .ps-edition-line {{
-        font-size: 9px; color: #888;
-        font-family: 'IM Fell English', Georgia, serif;
-        font-style: italic; margin-bottom: 2px;
-    }}
+    .ps-body {{padding:16px 20px 14px;}}
     .ps-tag {{
-        font-size: 7px; letter-spacing: 1.5px; text-transform: uppercase;
-        color: #999; font-family: sans-serif; margin-bottom: 4px;
-        padding-bottom: 3px; border-bottom: 0.5px solid #ccc;
+        font-size:7px;letter-spacing:1.5px;text-transform:uppercase;
+        color:#999;font-family:sans-serif;margin-bottom:4px;
+        padding-bottom:3px;border-bottom:0.5px solid #ccc;
     }}
+    .ps-edition {{font-size:9px;color:#888;font-family:'IM Fell English',Georgia,serif;font-style:italic;margin-bottom:2px;}}
     .ps-hed {{
-        font-size: 24px; color: #0d0d0f;
-        font-family: 'IM Fell English', Georgia, serif;
-        line-height: 1.1; margin-bottom: 3px; min-height: 32px;
+        font-size:24px;color:#0d0d0f;
+        font-family:'IM Fell English',Georgia,serif;
+        line-height:1.1;margin-bottom:4px;min-height:30px;
     }}
-    .ps-hed-cursor {{
-        display: inline-block; width: 2px; height: 0.85em;
-        background: #0d0d0f; margin-left: 2px;
-        vertical-align: text-bottom;
-        animation: psCursorBlink 0.75s step-end infinite;
+    .ps-cursor {{
+        display:inline-block;width:2px;height:0.85em;
+        background:#0d0d0f;margin-left:2px;vertical-align:text-bottom;
+        animation:psBlink 0.75s step-end infinite;
     }}
-    @keyframes psCursorBlink {{ 0%,100%{{opacity:1}} 50%{{opacity:0}} }}
-
+    @keyframes psBlink {{0%,100%{{opacity:1}}50%{{opacity:0}}}}
     .ps-deck {{
-        font-size: 9.5px; color: #666;
-        font-family: 'IM Fell English', Georgia, serif;
-        font-style: italic; line-height: 1.55;
-        margin-bottom: 14px; padding-bottom: 12px;
-        border-bottom: 0.5px solid #ccc;
+        font-size:9.5px;color:#666;
+        font-family:'IM Fell English',Georgia,serif;
+        font-style:italic;line-height:1.55;
+        margin-bottom:14px;padding-bottom:12px;border-bottom:0.5px solid #ccc;
     }}
-
-    /* ── Labels ── */
     .ps-label {{
-        font-size: 8px; color: #777; letter-spacing: 0.8px;
-        text-transform: uppercase; font-family: sans-serif;
-        margin-bottom: 4px; display: block;
+        font-size:8px;color:#777;letter-spacing:0.8px;
+        text-transform:uppercase;font-family:sans-serif;
+        margin-bottom:4px;display:block;
     }}
-
-    /* ── Override Streamlit inputs for newspaper look ── */
-    [data-testid="stTextInput"] input {{
-        background: #fff !important;
-        border: 0.5px solid #bbb !important;
-        border-radius: 1px !important;
-        color: #222 !important;
-        font-size: 12px !important;
-        font-family: 'IM Fell English', Georgia, serif !important;
+    .ps-inp {{
+        width:100%;background:#fff;border:0.5px solid #bbb;
+        border-radius:1px;padding:9px 12px;font-size:12px;color:#222;
+        font-family:'IM Fell English',Georgia,serif;outline:none;
+        margin-bottom:9px;box-sizing:border-box;
     }}
-    [data-testid="stTextInput"] input::placeholder {{
-        color: #bbb !important;
-        font-style: italic !important;
+    .ps-inp::placeholder {{color:#bbb;font-style:italic;}}
+    .ps-inp:focus {{border-color:#888;}}
+    .ps-btn-primary {{
+        width:100%;background:#0d0d0f;border:none;border-radius:1px;
+        padding:11px;font-size:12px;color:#f5f1e8;
+        font-family:'IM Fell English',Georgia,serif;
+        cursor:pointer;letter-spacing:0.5px;margin-bottom:6px;
+        display:block;box-sizing:border-box;
     }}
-
-    /* ── Primary button — black ink ── */
-    [data-testid="stButton"] > button[kind="primary"] {{
-        background: #0d0d0f !important;
-        border: none !important;
-        border-radius: 1px !important;
-        color: #f5f1e8 !important;
-        font-size: 12px !important;
-        font-family: 'IM Fell English', Georgia, serif !important;
-        letter-spacing: 0.5px !important;
-        width: 100% !important;
+    .ps-btn-primary:hover {{background:#222;}}
+    .ps-btn-secondary {{
+        width:100%;background:transparent;border:0.5px solid #bbb;
+        border-radius:1px;padding:9px;font-size:11px;color:#888;
+        font-family:'IM Fell English',Georgia,serif;cursor:pointer;
+        display:block;box-sizing:border-box;
     }}
-    [data-testid="stButton"] > button[kind="primary"]:hover {{
-        background: #222 !important;
+    .ps-otp-notice {{
+        font-size:10px;color:#555;
+        font-family:'IM Fell English',Georgia,serif;
+        font-style:italic;padding:7px 10px;
+        background:#ede9df;border:0.5px solid #ccc;
+        border-radius:1px;margin-bottom:10px;line-height:1.4;
     }}
-
-    /* ── Secondary button ── */
-    [data-testid="stButton"] > button[kind="secondary"] {{
-        background: transparent !important;
-        border: 0.5px solid #bbb !important;
-        border-radius: 1px !important;
-        color: #888 !important;
-        font-size: 11px !important;
-        font-family: 'IM Fell English', Georgia, serif !important;
+    .ps-col-rule {{height:0.5px;background:#ccc;margin:0 0 10px;}}
+    .ps-error {{
+        font-size:10px;color:#8B0000;font-family:sans-serif;
+        padding:6px 10px;background:#fdf0f0;border:0.5px solid #e0b0b0;
+        border-radius:1px;margin-bottom:8px;
     }}
-
-    /* ── OTP notice ── */
-    .ps-notice {{
-        font-size: 10px; color: #555;
-        font-family: 'IM Fell English', Georgia, serif;
-        font-style: italic; padding: 7px 10px;
-        background: #ede9df; border: 0.5px solid #ccc;
-        border-radius: 1px; margin-bottom: 6px; line-height: 1.4;
+    .ps-info {{
+        font-size:10px;color:#555;font-family:sans-serif;
+        padding:6px 10px;background:#ede9df;border:0.5px solid #ccc;
+        border-radius:1px;margin-bottom:8px;
     }}
-
-    .ps-col-rule {{ height: 0.5px; background: #ccc; margin: 8px 0 10px; }}
-
-    /* ── Footer ── */
-    .ps-card-footer {{
-        padding: 9px 20px 14px;
-        border-top: 1px solid #ccc;
-        background: #ede9df;
-        display: flex; justify-content: space-between;
+    .ps-foot {{
+        padding:9px 20px 14px;border-top:1px solid #ccc;
+        background:#ede9df;display:flex;justify-content:space-between;
     }}
-    .ps-footer-text {{ font-size: 7.5px; color: #999; font-family: sans-serif; }}
+    .ps-foot span {{font-size:7.5px;color:#999;font-family:sans-serif;}}
     </style>
 
-    <!-- Typewriter script -->
     <script>
     function psTypewriter() {{
         const greeting = "{_greeting}";
-        const el = document.getElementById('ps-tw-text');
-        const cursor = document.getElementById('ps-tw-cursor');
-        if (!el) {{ setTimeout(psTypewriter, 200); return; }}
+        const el  = document.getElementById('ps-tw');
+        const cur = document.getElementById('ps-cur');
+        if (!el) {{ setTimeout(psTypewriter, 150); return; }}
         let i = 0;
-        function type() {{
+        (function type() {{
             if (i <= greeting.length) {{
-                el.textContent = greeting.slice(0, i);
-                i++;
+                el.textContent = greeting.slice(0, i++);
                 setTimeout(type, i === 1 ? 500 : 75);
             }} else {{
-                setTimeout(() => {{ if(cursor) cursor.style.display = 'none'; }}, 2500);
+                setTimeout(() => {{ if(cur) cur.style.display='none'; }}, 2500);
             }}
-        }}
-        setTimeout(type, 400);
+        }})();
     }}
     document.addEventListener('DOMContentLoaded', psTypewriter);
     setTimeout(psTypewriter, 300);
+
+    function psSendOtp() {{
+        const email = document.getElementById('ps-email-inp').value.trim();
+        if (!email) {{ alert('Please enter your work email.'); return; }}
+        window.location.href = '?ps_action=send_otp&ps_email=' + encodeURIComponent(email);
+    }}
+    function psVerify() {{
+        const code = document.getElementById('ps-code-inp').value.trim();
+        if (!code) {{ alert('Please enter the 6-digit code.'); return; }}
+        window.location.href = '?ps_action=verify&ps_code=' + encodeURIComponent(code);
+    }}
+    function psResend() {{
+        window.location.href = '?ps_action=resend';
+    }}
+    // Allow Enter key on inputs
+    document.addEventListener('keydown', function(e) {{
+        if (e.key !== 'Enter') return;
+        const emailInp = document.getElementById('ps-email-inp');
+        const codeInp  = document.getElementById('ps-code-inp');
+        if (emailInp && document.activeElement === emailInp) psSendOtp();
+        if (codeInp  && document.activeElement === codeInp)  psVerify();
+    }});
     </script>
 
-    <!-- Card top: banner + masthead + body header -->
-    <div class="ps-top-banner">
-        <span class="ps-banner-label">Political Intelligence · {_edition}</span>
-        <span class="ps-banner-date">{_today}</span>
-    </div>
-    <div class="ps-masthead">
+    <div class="ps-card">
+      <div class="ps-banner">
+        <span>Political Intelligence · {_edition}</span>
+        <span>{_today}</span>
+      </div>
+      <div class="ps-masthead">
         <div class="ps-masthead-title">PolitiScan</div>
         <hr class="ps-masthead-rule"/>
         <div class="ps-masthead-sub">Secure Access · Authorised Correspondents Only</div>
-    </div>
-    <div class="ps-card-body">
+      </div>
+      <div class="ps-body">
         <div class="ps-tag">Correspondent Access</div>
-        <div class="ps-edition-line">{_edition} ·</div>
-        <div class="ps-hed">
-            <span id="ps-tw-text"></span><span id="ps-tw-cursor" class="ps-hed-cursor"></span>
-        </div>
+        <div class="ps-edition">{_edition} ·</div>
+        <div class="ps-hed"><span id="ps-tw"></span><span id="ps-cur" class="ps-cursor"></span></div>
         <div class="ps-deck">Sign in to access your political intelligence dashboard. For authorised correspondents only.</div>
+        {_error_html}
+        {_info_html}
+        {_form_html}
+      </div>
+      <div class="ps-foot">
+        <span>🔒 Secure · Authorised users only</span>
+        <span>v4.0</span>
+      </div>
     </div>
     """, unsafe_allow_html=True)
-
-    # ── Streamlit inputs inside the card column ───────────────────────────────
-    _, card_col, _ = st.columns([1, 1.2, 1])
-
-    with card_col:
-        if not st.session_state.get("otp_sent"):
-            st.markdown('<span class="ps-label">Work email</span>', unsafe_allow_html=True)
-            email = st.text_input(
-                "Work email", key="login_email_input",
-                label_visibility="collapsed",
-                placeholder="you@consultancy.com",
-            )
-            if st.button("Send one-time code →", type="primary", use_container_width=True):
-                if email not in ALLOWED_EMAILS:
-                    st.error("Access denied. Contact your administrator.")
-                else:
-                    otp = generate_otp()
-                    st.session_state.otp           = otp
-                    st.session_state.otp_timestamp = datetime.now()
-                    st.session_state.login_email   = email
-                    sent, send_err = send_otp_email(email, otp)
-                    if sent:
-                        st.session_state.otp_sent = True
-                        st.rerun()
-                    else:
-                        st.error(f"Failed to send OTP: {send_err}")
-        else:
-            st.markdown(
-                f'<div class="ps-notice">🕐 &nbsp; Code dispatched to {st.session_state.login_email} · expires in 10 min</div>',
-                unsafe_allow_html=True,
-            )
-            st.markdown('<div class="ps-col-rule"></div>', unsafe_allow_html=True)
-            st.markdown('<span class="ps-label">6-digit code</span>', unsafe_allow_html=True)
-            code = st.text_input(
-                "6-digit code", max_chars=6, key="otp_input",
-                label_visibility="collapsed",
-                placeholder="······",
-            )
-            if st.button("Verify and sign in →", type="primary", use_container_width=True):
-                if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
-                    st.session_state.logged_in  = True
-                    st.session_state.user_email = st.session_state.login_email
-                    for k in ("otp", "otp_timestamp", "otp_sent", "login_email"):
-                        st.session_state.pop(k, None)
-                    st.rerun()
-                else:
-                    st.error("Invalid or expired code. Please try again.")
-            if st.button("Resend code", use_container_width=True):
-                otp = generate_otp()
-                st.session_state.otp           = otp
-                st.session_state.otp_timestamp = datetime.now()
-                sent, send_err = send_otp_email(st.session_state.login_email, otp)
-                if sent:
-                    st.success("New code sent.")
-                else:
-                    st.error(f"Failed to resend: {send_err}")
-
-        st.markdown("""
-        <div class="ps-card-footer">
-          <span class="ps-footer-text">🔒 Secure · Authorised users only</span>
-          <span class="ps-footer-text">v4.0</span>
-        </div>
-        """, unsafe_allow_html=True)
 
     st.stop()
 
