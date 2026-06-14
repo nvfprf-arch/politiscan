@@ -634,158 +634,39 @@ if DEV_MODE:
     st.session_state.user_email = "dev@test.com"
 
 if not st.session_state.get("logged_in"):
+    st.title("PolitiScan")
+    st.subheader("Political Intelligence Dashboard")
 
-    _today = datetime.now().strftime("%d %b %Y").upper()
-
-    # ── Handle form submissions via query params ──────────────────────────────
-    _params = st.query_params
-    _action = _params.get("ps_action", "")
-    _qemail = _params.get("ps_email", "")
-    _qcode  = _params.get("ps_code", "")
-
-    _login_error = ""
-    _login_info  = ""
-
-    if _action == "send_otp" and _qemail:
-        st.query_params.clear()
-        if _qemail not in ALLOWED_EMAILS:
-            _login_error = "Access denied. Contact your administrator."
-        else:
-            _otp = generate_otp()
-            st.session_state.otp           = _otp
-            st.session_state.otp_timestamp = datetime.now()
-            st.session_state.login_email   = _qemail
-            _sent, _err = send_otp_email(_qemail, _otp)
-            if _sent:
-                st.session_state.otp_sent = True
+    if not st.session_state.get("otp_sent"):
+        email = st.text_input("Email address", key="login_email_input")
+        if st.button("Send OTP", type="primary"):
+            if email not in ALLOWED_EMAILS:
+                st.error("Access denied. Contact your administrator.")
+            else:
+                otp = generate_otp()
+                st.session_state.otp           = otp
+                st.session_state.otp_timestamp = datetime.now()
+                st.session_state.login_email   = email
+                sent, send_err = send_otp_email(email, otp)
+                if sent:
+                    st.session_state.otp_sent = True
+                    st.rerun()
+                else:
+                    st.error(f"Failed to send OTP: {send_err}")
+    else:
+        st.success(f"OTP sent to {st.session_state.login_email}. Enter the 6-digit code below.")
+        code = st.text_input("6-digit code", max_chars=6, key="otp_input")
+        if st.button("Verify", type="primary"):
+            if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
+                st.session_state.logged_in  = True
+                st.session_state.user_email = st.session_state.login_email
+                # Clear login state
+                for k in ("otp", "otp_timestamp", "otp_sent", "login_email"):
+                    st.session_state.pop(k, None)
                 st.rerun()
             else:
-                _login_error = f"Failed to send code: {_err}"
+                st.error("Invalid or expired code. Please try again.")
 
-    elif _action == "verify" and _qcode:
-        st.query_params.clear()
-        if verify_otp(_qcode, st.session_state.get("otp", ""), st.session_state.get("otp_timestamp", datetime.now())):
-            st.session_state.logged_in  = True
-            st.session_state.user_email = st.session_state.get("login_email", "")
-            for k in ("otp", "otp_timestamp", "otp_sent", "login_email"):
-                st.session_state.pop(k, None)
-            st.rerun()
-        else:
-            _login_error = "Invalid or expired code. Please try again."
-
-    elif _action == "resend":
-        st.query_params.clear()
-        _otp = generate_otp()
-        st.session_state.otp           = _otp
-        st.session_state.otp_timestamp = datetime.now()
-        _sent, _err = send_otp_email(st.session_state.get("login_email", ""), _otp)
-        _login_info = "New code sent." if _sent else f"Failed to resend: {_err}"
-
-    # ── Build form section ────────────────────────────────────────────────────
-    _otp_sent    = st.session_state.get("otp_sent", False)
-    _login_email = st.session_state.get("login_email", "")
-
-    _error_html = ('<div class="ps-error">' + _login_error + '</div>') if _login_error else ""
-    _info_html  = ('<div class="ps-info">'  + _login_info  + '</div>') if _login_info  else ""
-
-    if _otp_sent:
-        _form_html = (
-            '<div class="ps-otp-notice">Code sent to ' + _login_email + ' &middot; expires in 10 min</div>'
-            '<div class="ps-col-rule"></div>'
-            '<label class="ps-label">6-digit code</label>'
-            '<input class="ps-inp" id="ps-code-inp" type="text" maxlength="6" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="one-time-code" style="letter-spacing:6px;text-align:center;font-size:16px;" />'
-            '<button class="ps-btn-primary" onclick="psVerify()">Verify and sign in &rarr;</button>'
-            '<button class="ps-btn-secondary" onclick="psResend()">Resend code</button>'
-        )
-    else:
-        _form_html = (
-            '<label class="ps-label">Work email</label>'
-            '<input class="ps-inp" id="ps-email-inp" type="email" placeholder="you@consultancy.com" autocomplete="email" style="width:100%;background:#fff;border:0.5px solid #bbb;border-radius:1px;padding:9px 12px;font-size:12px;color:#222;font-family:Georgia,serif;outline:none;margin-bottom:9px;box-sizing:border-box;" />'
-            '<button class="ps-btn-primary" onclick="psSendOtp()" style="width:100%;background:#0d0d0f;border:none;border-radius:1px;padding:11px;font-size:12px;color:#f5f1e8;font-family:Georgia,serif;cursor:pointer;letter-spacing:0.5px;margin-bottom:6px;display:block;box-sizing:border-box;">Send one-time code &#8594;</button>'
-        )
-
-    # ── Single HTML block ─────────────────────────────────────────────────────
-    _html = (
-        '<style>'
-        '@import url("https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap");'
-        '[data-testid="stSidebarNav"]{display:none!important;}'
-        '[data-testid="stSidebar"]{display:none!important;}'
-        'header{display:none!important;}'
-        '#MainMenu{display:none!important;}'
-        'footer{display:none!important;}'
-        '.stApp{background:#060607!important;}'
-        'html,body{background:#060607!important;}'
-        '.block-container{padding:2rem 1rem!important;max-width:100%!important;min-height:100vh!important;display:flex!important;align-items:center!important;justify-content:center!important;}'
-        '.ps-card{width:420px;background:#f5f1e8;border:1px solid #c8c0a8;border-radius:2px;overflow:hidden;box-shadow:0 0 0 5px #0d0d0f,0 0 0 5.5px #1e1e22;margin:0 auto;}'
-        '.ps-banner{background:#0d0d0f;padding:8px 20px;display:flex;justify-content:space-between;}'
-        '.ps-banner span{font-size:7px;color:#606060;letter-spacing:1.5px;text-transform:uppercase;font-family:sans-serif;}'
-        '.ps-masthead{padding:10px 20px 0;border-bottom:3px double #1a1a1a;background:#f5f1e8;}'
-        '.ps-masthead-title{font-size:34px;color:#0d0d0f;letter-spacing:5px;font-family:"IM Fell English",Georgia,serif;text-align:center;line-height:1;margin-bottom:3px;}'
-        '.ps-masthead-rule{border:none;border-top:0.5px solid #aaa;margin:3px 0 0;}'
-        '.ps-masthead-sub{font-size:7px;color:#777;text-align:center;letter-spacing:2px;text-transform:uppercase;padding:3px 0 7px;font-family:sans-serif;}'
-        '.ps-body{padding:16px 20px 14px;}'
-        '.ps-tag{font-size:7px;letter-spacing:1.5px;text-transform:uppercase;color:#999;font-family:sans-serif;margin-bottom:6px;padding-bottom:3px;border-bottom:0.5px solid #ccc;}'
-        '.ps-hed{font-size:24px;color:#0d0d0f;font-family:"IM Fell English",Georgia,serif;line-height:1.1;margin-bottom:4px;}'
-        '.ps-deck{font-size:9.5px;color:#666;font-family:"IM Fell English",Georgia,serif;font-style:italic;line-height:1.55;margin-bottom:14px;padding-bottom:12px;border-bottom:0.5px solid #ccc;}'
-        '.ps-label{font-size:8px;color:#777;letter-spacing:0.8px;text-transform:uppercase;font-family:sans-serif;margin-bottom:4px;display:block;}'
-        '.ps-inp{width:100%;background:#fff;border:0.5px solid #bbb;border-radius:1px;padding:9px 12px;font-size:12px;color:#222;font-family:"IM Fell English",Georgia,serif;outline:none;margin-bottom:9px;box-sizing:border-box;}'
-        '.ps-inp::placeholder{color:#bbb;font-style:italic;}'
-        '.ps-inp:focus{border-color:#888;}'
-        '.ps-btn-primary{width:100%;background:#0d0d0f;border:none;border-radius:1px;padding:11px;font-size:12px;color:#f5f1e8;font-family:"IM Fell English",Georgia,serif;cursor:pointer;letter-spacing:0.5px;margin-bottom:6px;display:block;box-sizing:border-box;}'
-        '.ps-btn-primary:hover{background:#222;}'
-        '.ps-btn-secondary{width:100%;background:transparent;border:0.5px solid #bbb;border-radius:1px;padding:9px;font-size:11px;color:#888;font-family:"IM Fell English",Georgia,serif;cursor:pointer;display:block;box-sizing:border-box;}'
-        '.ps-otp-notice{font-size:10px;color:#555;font-family:"IM Fell English",Georgia,serif;font-style:italic;padding:7px 10px;background:#ede9df;border:0.5px solid #ccc;border-radius:1px;margin-bottom:10px;line-height:1.4;}'
-        '.ps-col-rule{height:0.5px;background:#ccc;margin:0 0 10px;}'
-        '.ps-error{font-size:10px;color:#8B0000;font-family:sans-serif;padding:6px 10px;background:#fdf0f0;border:0.5px solid #e0b0b0;border-radius:1px;margin-bottom:8px;}'
-        '.ps-info{font-size:10px;color:#555;font-family:sans-serif;padding:6px 10px;background:#ede9df;border:0.5px solid #ccc;border-radius:1px;margin-bottom:8px;}'
-        '.ps-foot{padding:9px 20px 14px;border-top:1px solid #ccc;background:#ede9df;display:flex;justify-content:space-between;}'
-        '.ps-foot span{font-size:7.5px;color:#999;font-family:sans-serif;}'
-        '</style>'
-        '<script>'
-        'function psNav(url){'
-        'try{window.top.location.href=url;}catch(e){'
-        'try{window.parent.location.href=url;}catch(e2){'
-        'window.location.href=url;}}}'
-        'function psSendOtp(){'
-        'var e=document.getElementById("ps-email-inp");'
-        'if(!e||!e.value.trim()){alert("Please enter your work email.");return;}'
-        'psNav("?ps_action=send_otp&ps_email="+encodeURIComponent(e.value.trim()));}'
-        'function psVerify(){'
-        'var c=document.getElementById("ps-code-inp");'
-        'if(!c||!c.value.trim()){alert("Please enter the 6-digit code.");return;}'
-        'psNav("?ps_action=verify&ps_code="+encodeURIComponent(c.value.trim()));}'
-        'function psResend(){psNav("?ps_action=resend");}'
-        'document.addEventListener("keydown",function(e){'
-        'if(e.key!=="Enter")return;'
-        'var ei=document.getElementById("ps-email-inp");'
-        'var ci=document.getElementById("ps-code-inp");'
-        'if(ei&&document.activeElement===ei)psSendOtp();'
-        'if(ci&&document.activeElement===ci)psVerify();});'
-        '</script>'
-        '<div class="ps-card">'
-        '<div class="ps-banner">'
-        '<span>Political Intelligence &middot; India Desk</span>'
-        '<span>' + _today + '</span>'
-        '</div>'
-        '<div class="ps-masthead">'
-        '<div class="ps-masthead-title">PolitiScan</div>'
-        '<hr class="ps-masthead-rule"/>'
-        '<div class="ps-masthead-sub">Secure Access &middot; Authorised Correspondents Only</div>'
-        '</div>'
-        '<div class="ps-body">'
-        '<div class="ps-tag">Correspondent Access</div>'
-        '<div class="ps-hed">Welcome back</div>'
-        '<div class="ps-deck">Sign in to access your political intelligence dashboard. For authorised correspondents only.</div>'
-        + _error_html + _info_html + _form_html +
-        '</div>'
-        '<div class="ps-foot">'
-        '<span>&#128274; Secure &middot; Authorised users only</span>'
-        '<span>v4.0</span>'
-        '</div>'
-        '</div>'
-    )
-
-    st.markdown(_html, unsafe_allow_html=True)
     st.stop()
 
 # ---------------------------------------------------------------------------
