@@ -666,9 +666,9 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 .np-meta-rule  { flex:1; height:0.5px; background:#b0a080; }
 .np-meta-text  { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; white-space:nowrap; }
-.np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0 0 1.25rem 0; }
+.np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0 0 0.6rem 0; }
 .np-subhead    { font-family:"Georgia","Times New Roman",serif; font-size:12.5px;
-                 font-style:italic; color:#4a3e28 !important; text-align:center; margin-bottom:1.5rem; }
+                 font-style:italic; color:#4a3e28 !important; text-align:center; margin-bottom:1.25rem; }
 .np-label      { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important;
                  display:block; margin-bottom:4px; }
@@ -687,7 +687,27 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 }
 .block-container .stTextInput input::placeholder { color: #9a8a6a !important; font-style: italic; }
 
-/* Primary button — cream text on black bg */
+/* Resend button — looks like a plain italic text link */
+.block-container [data-testid="stHorizontalBlock"] button {
+    background: transparent !important;
+    border: none !important;
+    color: #7a6a4a !important;
+    font-family: "Georgia","Times New Roman",serif !important;
+    font-size: 11px !important;
+    font-style: italic !important;
+    letter-spacing: 0.05em !important;
+    text-transform: none !important;
+    text-decoration: underline !important;
+    padding: 0 !important;
+    width: auto !important;
+    box-shadow: none !important;
+}
+.block-container [data-testid="stHorizontalBlock"] button p,
+.block-container [data-testid="stHorizontalBlock"] button span {
+    color: #7a6a4a !important;
+    font-style: italic !important;
+    text-decoration: underline !important;
+}
 .block-container button[kind="primary"] {
     background: #1a1a1a !important; color: #f4efe3 !important;
     border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;
@@ -728,11 +748,12 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
             <div class="np-meta-rule"></div>
         </div>
         <hr class="np-divider">
-        <div class="np-subhead">Enter your email to receive today's intelligence dispatch</div>
+        <div class="np-subhead" style="margin-bottom:0.75rem;">Enter your email to receive today's intelligence dispatch</div>
     ''', unsafe_allow_html=True)
 
+    # Email field always visible
+    st.markdown('<div class="np-label">Email Address</div>', unsafe_allow_html=True)
     if not st.session_state.get("otp_sent"):
-        st.markdown('<div class="np-label">Email Address</div>', unsafe_allow_html=True)
         email = st.text_input("Email Address", key="login_email_input", label_visibility="collapsed",
                               placeholder="you@example.com")
         if st.button("Send Verification Code", type="primary", key="send_otp_btn"):
@@ -750,7 +771,7 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
                 else:
                     st.error(f"Failed to send OTP: {send_err}")
     else:
-        st.markdown('<div class="np-label">Email Address</div>', unsafe_allow_html=True)
+        # Keep email box visible but disabled
         st.text_input("Email Address", value=st.session_state.login_email,
                       key="login_email_display", label_visibility="collapsed", disabled=True)
 
@@ -772,17 +793,19 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
             else:
                 st.error("Invalid or expired code. Please try again.")
 
-        st.markdown('<div class="np-resend">', unsafe_allow_html=True)
-        if st.button("Resend code", type="primary", key="resend_btn"):
-            otp = generate_otp()
-            st.session_state.otp           = otp
-            st.session_state.otp_timestamp = datetime.now()
-            sent, send_err = send_otp_email(st.session_state.login_email, otp)
-            if sent:
-                st.success("New code sent.")
-            else:
-                st.error(f"Failed to resend: {send_err}")
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Resend as centred italic text link, not a black button
+        st.markdown('<div style="text-align:center; margin-top:0.75rem;"></div>', unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([2, 1, 2])
+        with col2:
+            if st.button("Resend", key="resend_btn"):
+                otp = generate_otp()
+                st.session_state.otp           = otp
+                st.session_state.otp_timestamp = datetime.now()
+                sent, send_err = send_otp_email(st.session_state.login_email, otp)
+                if sent:
+                    st.success("New code sent.")
+                else:
+                    st.error(f"Failed to resend: {send_err}")
 
     st.markdown('<div class="np-footer">For authorised personnel only &middot; PolitiScan Intelligence</div>',
                 unsafe_allow_html=True)
