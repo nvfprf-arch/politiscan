@@ -896,9 +896,6 @@ with st.sidebar:
         selected_report_type = st.selectbox(
             "Show Report Types",
             options=["All Report Types", "CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
-            index=["All Report Types", "CONFIRMED", "SPECULATIVE", "ANALYTICAL"].index(
-                st.session_state.get("selected_report_types", "All Report Types")
-            ),
         )
         st.session_state.selected_report_types = selected_report_type
 
