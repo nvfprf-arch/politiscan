@@ -696,6 +696,44 @@ def _style_report_type(col):
     return col.map(lambda v: _TYPE_STYLES.get(v, ""))
 
 
+_BADGE_CSS = {
+    "CONFIRMED":   "background:#1a472a;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
+    "SPECULATIVE": "background:#7d4e00;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
+    "ANALYTICAL":  "background:#1a3a5c;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
+}
+_TH = "padding:6px 10px;text-align:left;border-bottom:1px solid #444;white-space:nowrap;"
+_TD = "padding:6px 10px;vertical-align:top;"
+
+
+def _render_article_table(rows: list) -> None:
+    """Render a list of article row dicts as a styled HTML table."""
+    header_html = "".join(f"<th style='{_TH}'>{c}</th>" for c in _COL_ORDER)
+    body_html = ""
+    for row in rows:
+        cells = ""
+        for col in _COL_ORDER:
+            val = row.get(col, "") or ""
+            if col == "Report Type":
+                s = _BADGE_CSS.get(val, "")
+                content = f'<span style="{s}">{val}</span>'
+            elif col == "Link":
+                content = f'<a href="{val}" target="_blank" style="color:#4da6ff;">Read</a>' if val else ""
+            elif col == "Score":
+                content = f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
+            else:
+                content = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            cells += f"<td style='{_TD}'>{content}</td>"
+        body_html += f"<tr>{cells}</tr>"
+    st.markdown(
+        "<div style='overflow-x:auto;'>"
+        "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+        f"<thead><tr style='background:#2a2a2a;'>{header_html}</tr></thead>"
+        f"<tbody>{body_html}</tbody>"
+        "</table></div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _show_results():
     """Render AI Shortlist section, Read All section, and Export to PDF."""
     import pandas as pd
@@ -744,19 +782,7 @@ def _show_results():
 
     st.subheader(f"AI Shortlist ({len(shortlist)} articles)")
     if shortlist:
-        df_short = pd.DataFrame([{c: r.get(c, "") for c in _COL_ORDER} for r in shortlist])
-        styled_short = df_short.style.apply(_style_report_type, subset=["Report Type"])
-        st.dataframe(
-            styled_short,
-            width="stretch",
-            hide_index=True,
-            column_config={
-                "Score":    st.column_config.NumberColumn("Score", format="%.1f"),
-                "Headline": st.column_config.TextColumn("Headline", width="medium"),
-                "Summary":  st.column_config.TextColumn("Summary",  width="medium"),
-                "Link":     st.column_config.LinkColumn("Link", display_text="Read"),
-            },
-        )
+        _render_article_table(shortlist)
     else:
         st.caption("No articles above shortlist threshold yet. Promote articles below to train your shortlist.")
 
@@ -773,38 +799,7 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            _BADGE_CSS = {
-                "CONFIRMED":   "background:#1a472a;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
-                "SPECULATIVE": "background:#7d4e00;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
-                "ANALYTICAL":  "background:#1a3a5c;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
-            }
-            th_style = "padding:6px 10px;text-align:left;border-bottom:1px solid #444;white-space:nowrap;"
-            td_style = "padding:6px 10px;vertical-align:top;"
-            header_html = "".join(f"<th style='{th_style}'>{c}</th>" for c in _COL_ORDER)
-            body_html = ""
-            for row in non_shortlist:
-                cells = ""
-                for col in _COL_ORDER:
-                    val = row.get(col, "") or ""
-                    if col == "Report Type":
-                        s = _BADGE_CSS.get(val, "")
-                        content = f'<span style="{s}">{val}</span>'
-                    elif col == "Link":
-                        content = f'<a href="{val}" target="_blank" style="color:#4da6ff;">Read</a>' if val else ""
-                    elif col == "Score":
-                        content = f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
-                    else:
-                        content = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                    cells += f"<td style='{td_style}'>{content}</td>"
-                body_html += f"<tr>{cells}</tr>"
-            table_html = (
-                "<div style='overflow-x:auto;'>"
-                "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
-                f"<thead><tr style='background:#2a2a2a;'>{header_html}</tr></thead>"
-                f"<tbody>{body_html}</tbody>"
-                "</table></div>"
-            )
-            st.markdown(table_html, unsafe_allow_html=True)
+            _render_article_table(non_shortlist)
 
             available_headlines = [r.get("Headline", "") for r in non_shortlist if r.get("Headline")]
             selected_headlines = st.multiselect(
