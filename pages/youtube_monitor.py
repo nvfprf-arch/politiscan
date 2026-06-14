@@ -165,11 +165,40 @@ with st.sidebar:
         if all_tags:
             tag_filter = st.multiselect("Filter by Tag", all_tags)
 
-        report_type_filter = st.multiselect(
+        _rt_all = "All Report Types"
+        _rt_options = [_rt_all, "CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
+
+        if "yt_report_type_widget" not in st.session_state:
+            st.session_state["yt_report_type_widget"] = [_rt_all]
+            st.session_state["yt_prev_report_types"] = [_rt_all]
+
+        def _on_report_type_change():
+            current = st.session_state["yt_report_type_widget"]
+            prev = st.session_state["yt_prev_report_types"]
+            newly_added = [x for x in current if x not in prev]
+
+            if not newly_added:
+                if not current:
+                    st.session_state["yt_report_type_widget"] = [_rt_all]
+            elif _rt_all in newly_added:
+                st.session_state["yt_report_type_widget"] = [_rt_all]
+            else:
+                st.session_state["yt_report_type_widget"] = [x for x in current if x != _rt_all]
+
+            st.session_state["yt_prev_report_types"] = list(st.session_state["yt_report_type_widget"])
+
+        st.multiselect(
             "Show Report Types",
-            ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
-            default=["CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
+            _rt_options,
+            key="yt_report_type_widget",
+            on_change=_on_report_type_change,
         )
+
+        _rt_sel = st.session_state["yt_report_type_widget"]
+        if _rt_all in _rt_sel:
+            report_type_filter = ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
+        else:
+            report_type_filter = _rt_sel
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -402,15 +431,16 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
 
         st.dataframe(
             styled,
-            width="stretch",
             column_config={
                 "Score": st.column_config.NumberColumn("Score", format="%.2f"),
                 "YouTube Link": st.column_config.LinkColumn("YouTube Link", display_text="Watch"),
+                "Title": st.column_config.TextColumn("Title", width="large"),
                 "Summary": st.column_config.TextColumn("Summary", width="large"),
-                "Title": st.column_config.TextColumn("Title", width="medium"),
             },
-            column_order=["Rank", "Score", "Tag", "Relevance", "Title", "Channel", "Views/hr", "Summary", "Report Type", "YouTube Link"],
+            column_order=["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"],
             hide_index=True,
+            height=800,
+            use_container_width=True,
         )
 
     # ── PDF Report ────────────────────────────────────────────────────────────
