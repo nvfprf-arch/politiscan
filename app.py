@@ -814,57 +814,45 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            # Header row: HTML column headers left, "Add" label right
-            col_hd, col_hb = st.columns([18, 1])
-            with col_hd:
-                header_cells = "".join(f"<th style='{_TH}'>{c}</th>" for c in _COL_ORDER)
-                st.markdown(
-                    f"<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
-                    f"<thead><tr style='background:#2a2a2a;'>{header_cells}</tr></thead></table>",
-                    unsafe_allow_html=True,
-                )
-            with col_hb:
-                st.markdown(
-                    f"<div style='{_TH}background:#2a2a2a;color:white;"
-                    f"text-align:center;'>Add</div>",
-                    unsafe_allow_html=True,
-                )
+            _editor_cols = ["Rank", "Score", "Report Type", "Headline", "Summary", "Sources"]
 
-            # One row per article: HTML data cells left, + button right
-            for i, row in enumerate(non_shortlist):
-                col_d, col_b = st.columns([18, 1])
-                with col_d:
-                    cells = ""
-                    for col in _COL_ORDER:
-                        val = row.get(col, "") or ""
-                        if col == "Report Type":
-                            s = _BADGE_CSS.get(val, "")
-                            content = f'<span style="{s}">{val}</span>'
-                        elif col == "Link":
-                            content = (
-                                f'<a href="{val}" target="_blank" style="color:#4da6ff;">Read</a>'
-                                if val else ""
-                            )
-                        elif col == "Score":
-                            content = f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
-                        else:
-                            if col == "Summary" and val.startswith("What happened: "):
-                                val = val[len("What happened: "):]
-                            content = (
-                                str(val)
-                                .replace("&", "&amp;")
-                                .replace("<", "&lt;")
-                                .replace(">", "&gt;")
-                            )
-                        cells += f"<td style='{_TD}'>{content}</td>"
-                    st.markdown(
-                        f"<table style='width:100%;border-collapse:collapse;"
-                        f"font-size:13px;border-bottom:1px solid #444;'>"
-                        f"<tbody><tr>{cells}</tr></tbody></table>",
-                        unsafe_allow_html=True,
-                    )
-                with col_b:
-                    if st.button("＋", key=f"add_article_{i}"):
+            def _strip_prefix(v):
+                if isinstance(v, str) and v.startswith("What happened: "):
+                    return v[len("What happened: "):]
+                return v
+
+            editor_rows = [
+                {
+                    "Add?":        False,
+                    "Rank":        row.get("Rank", ""),
+                    "Score":       row.get("Score", ""),
+                    "Report Type": row.get("Report Type", ""),
+                    "Headline":    row.get("Headline", ""),
+                    "Summary":     _strip_prefix(row.get("Summary", "") or ""),
+                    "Sources":     row.get("Sources", ""),
+                }
+                for row in non_shortlist
+            ]
+            edit_df = pd.DataFrame(editor_rows)[["Add?"] + _editor_cols]
+            edited = st.data_editor(
+                edit_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Add?":        st.column_config.CheckboxColumn("Add?", default=False),
+                    "Score":       st.column_config.NumberColumn("Score", format="%.1f"),
+                    "Headline":    st.column_config.TextColumn("Headline", width="large"),
+                    "Summary":     st.column_config.TextColumn("Summary",  width="large"),
+                },
+                key="all_articles_editor",
+            )
+
+            if st.button("Add to Shortlist", key="add_shortlist_btn"):
+                selected_indices = edited.loc[edited["Add?"] == True].index.tolist()
+                count = 0
+                for idx in selected_indices:
+                    if idx < len(non_shortlist):
+                        row = non_shortlist[idx]
                         article = {
                             "url":          row.get("Link", ""),
                             "headline":     row.get("Headline", ""),
@@ -876,8 +864,10 @@ def _show_results():
                         record_promotion(st.session_state.user_email, article)
                         if row not in st.session_state.shortlist_articles:
                             st.session_state.shortlist_articles.append(row)
-                        st.toast(f"Added to shortlist: {row.get('Headline', '')[:80]}")
-                        st.rerun()
+                        count += 1
+                if count > 0:
+                    st.success(f"{count} article{'s' if count != 1 else ''} added to your shortlist.")
+                    st.rerun()
         else:
             st.caption("All scanned articles are already in your shortlist.")
 
