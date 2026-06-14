@@ -644,23 +644,32 @@ if not st.session_state.get("logged_in"):
     #MainMenu {display: none;}
     footer {display: none;}
 
-    /* Full page black background */
+    /* Full page background */
     .stApp { background: #060607 !important; }
     html, body { background: #060607 !important; }
 
-    /* Remove all default block padding so we control spacing */
+    /* Center layout */
     .block-container {
         padding: 0 !important;
         max-width: 100% !important;
+        min-height: 100vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
     }
 
-    /* Style the center column to look like a card */
+    [data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+        min-height: 100vh !important;
+        padding: 2rem 0 !important;
+    }
+
+    /* Card column */
     [data-testid="stHorizontalBlock"] > div:nth-child(2) {
         background: #0e0e12 !important;
         border: 0.5px solid #28282e !important;
         border-radius: 14px !important;
-        padding: 1.75rem !important;
-        margin-top: 8vh !important;
+        padding: 2rem !important;
     }
 
     /* Input fields */
@@ -732,11 +741,11 @@ if not st.session_state.get("logged_in"):
         font-size: 10px; color: #242430;
     }
 
-    /* Newspaper background */
-    .ps-bg {
+    /* Newspaper background — injected directly into body by JS */
+    #ps-bg-root {
         position: fixed; inset: 0; overflow: hidden;
-        opacity: 0.15; z-index: -1; padding: 8px;
-        pointer-events: none;
+        opacity: 0.16; padding: 8px;
+        pointer-events: none; z-index: 0;
     }
     .ps-bg-inner {
         display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0;
@@ -750,11 +759,12 @@ if not st.session_state.get("logged_in"):
     .ps-bg-hed { font-size: 11px; color: #fff; line-height: 1.35; margin-bottom: 3px; font-family: 'IM Fell English', Georgia, serif; }
     .ps-bg-byline { font-size: 8px; color: #aaa; margin-bottom: 3px; font-style: italic; font-family: 'IM Fell English', Georgia, serif; }
     .ps-bg-body { font-size: 9px; color: #888; line-height: 1.6; }
+
+    /* Make sure stApp and its children don't create a new stacking context that clips our bg */
+    .stApp { isolation: auto !important; }
     </style>
 
-    <!-- Scrolling newspaper background (fixed, behind everything) -->
-    <div class="ps-bg"><div id="ps-bg-inner" class="ps-bg-inner"></div></div>
-
+    <!-- Background injected by JS directly into body -->
     <script>
     const PS_STORIES = [
       {tag:"ELECTION",hed:"Election Commission issues formal notice for five state assembly by-elections; polling dates announced",byline:"Bureau Chief · New Delhi",body:"Opposition parties have raised concerns over timing, demanding the model code of conduct be enforced immediately across all affected constituencies."},
@@ -771,27 +781,30 @@ if not st.session_state.get("logged_in"):
       {tag:"ELECTION",hed:"JMM releases first candidate list; women nominees raised to 30 percent of total contested seats",byline:"Eastern Bureau · Ranchi",body:"Jharkhand Mukti Morcha's first list signals a significant shift in voter outreach with a substantially higher proportion of women than the previous cycle."},
     ];
     function psBuildBg() {
+      if (document.getElementById('ps-bg-root')) return;
       const doubled = [...PS_STORIES, ...PS_STORIES];
       const third = Math.ceil(doubled.length / 3);
-      let html = '';
+      let colsHtml = '';
       for (let c = 0; c < 3; c++) {
         const slice = doubled.slice(c * third, (c+1) * third);
-        html += '<div class="ps-bg-col">' + slice.map(s =>
+        colsHtml += '<div class="ps-bg-col">' + slice.map(s =>
           `<div class="ps-bg-story"><div class="ps-bg-tag">${s.tag}</div><div class="ps-bg-hed">${s.hed}</div><div class="ps-bg-byline">${s.byline}</div><div class="ps-bg-body">${s.body}</div></div>`
         ).join('') + '</div>';
       }
-      const el = document.getElementById('ps-bg-inner');
-      if (el) { el.innerHTML = html; }
+      const root = document.createElement('div');
+      root.id = 'ps-bg-root';
+      root.innerHTML = '<div class="ps-bg-inner">' + colsHtml + '</div>';
+      document.body.insertBefore(root, document.body.firstChild);
     }
     document.addEventListener('DOMContentLoaded', psBuildBg);
-    setTimeout(psBuildBg, 500);
+    setTimeout(psBuildBg, 300);
+    setTimeout(psBuildBg, 1000);
     </script>
-
 
     """, unsafe_allow_html=True)
 
-    # Three columns: spacer | card | spacer
-    _, card_col, _ = st.columns([1.5, 1, 1.5])
+    # Three columns: spacer | card | spacer — wider card ratio
+    _, card_col, _ = st.columns([1, 1.2, 1])
 
     with card_col:
         # Brand header
