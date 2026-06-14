@@ -634,7 +634,8 @@ if DEV_MODE:
     st.session_state.user_email = "dev@test.com"
 
 if not st.session_state.get("logged_in"):
-    st.markdown("<style>[data-testid='stSidebarNav'] {display: none;}</style>", unsafe_allow_html=True)
+    st.markdown('<style>[data-testid="stSidebarNav"], [data-testid="stSidebarNavItems"], section[data-testid="stSidebar"] ul, .st-emotion-cache-1cypcdb, nav[data-testid="stSidebarNav"] {display: none !important;}</style>', unsafe_allow_html=True)
+    st.markdown('<style>section[data-testid="stSidebar"] {display: none !important;}</style>', unsafe_allow_html=True)
     st.title("PolitiScan")
     st.subheader("Political Intelligence Dashboard")
 
