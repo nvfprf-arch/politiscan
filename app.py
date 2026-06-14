@@ -805,10 +805,67 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
     st.stop()
 
 # ---------------------------------------------------------------------------
-# App title (shown only when logged in)
+# Theme + session defaults (logged-in only)
 # ---------------------------------------------------------------------------
-st.title("PolitiScan")
-st.markdown("#### Political Intelligence Dashboard")
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = "news"
+
+if st.session_state.dark_mode:
+    _bg, _sbg, _txt, _muted = "#0d0d0d", "#111111", "#e0e0e0", "#999999"
+else:
+    _bg, _sbg, _txt, _muted = "#f5f0e8", "#ede8de", "#1a1a1a", "#666666"
+
+st.markdown(f"""
+<style>
+[data-testid="stSidebarNav"] {{display: none !important;}}
+.stApp {{background-color: {_bg} !important;}}
+section[data-testid="stSidebar"] {{background-color: {_sbg} !important;}}
+.stApp p, .stApp label, .stApp div, .stApp span {{color: {_txt};}}
+.stApp h1, .stApp h2, .stApp h3, .stApp h4 {{font-family: Georgia, 'Times New Roman', serif; color: {_txt};}}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Top bar
+# ---------------------------------------------------------------------------
+_tb_l, _tb_c, _tb_r = st.columns([2, 3, 4])
+
+with _tb_l:
+    st.markdown(
+        f'<p style="font-family:Georgia,serif;font-size:1.7rem;font-weight:bold;'
+        f'color:{_txt};margin:0;padding-top:6px;line-height:1;">PolitiScan</p>',
+        unsafe_allow_html=True,
+    )
+
+with _tb_c:
+    _c1, _c2 = st.columns(2)
+    with _c1:
+        _news_style = "primary" if st.session_state.active_tab == "news" else "secondary"
+        if st.button("News", use_container_width=True, type=_news_style, key="tab_news"):
+            st.session_state.active_tab = "news"
+            st.rerun()
+    with _c2:
+        _yt_style = "primary" if st.session_state.active_tab == "youtube" else "secondary"
+        if st.button("YouTube", use_container_width=True, type=_yt_style, key="tab_yt"):
+            st.session_state.active_tab = "youtube"
+            st.switch_page("pages/youtube_monitor.py")
+
+with _tb_r:
+    _r1, _r2, _r3 = st.columns([3, 2, 1])
+    with _r1:
+        st.caption(st.session_state.user_email)
+    with _r2:
+        if st.button("Logout", use_container_width=True, key="topbar_logout"):
+            for _k in list(st.session_state.keys()):
+                del st.session_state[_k]
+            st.rerun()
+    with _r3:
+        _mode_icon = "☀️" if st.session_state.dark_mode else "🌙"
+        if st.button(_mode_icon, key="dark_toggle"):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
 
 # Load/refresh client profile once per session
 if "profile_loaded" not in st.session_state:
@@ -859,6 +916,8 @@ def _render_article_table(rows: list, table_class: str = "") -> None:
                 if col == "Summary" and val.startswith("What happened: "):
                     val = val[len("What happened: "):]
                 content = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                if col == "Headline":
+                    content = f'<span style="font-family:Georgia,serif;">{content}</span>'
             cells += f"<td style='{_TD}'>{content}</td>"
         body_html += f"<tr>{cells}</tr>"
     st.markdown(
@@ -874,6 +933,19 @@ def _render_article_table(rows: list, table_class: str = "") -> None:
 def _show_results():
     """Render AI Shortlist section, Read All section, and Export to PDF."""
     import pandas as pd
+
+    # Newspaper dateline
+    _dl_date   = datetime.now().strftime("%A, %d %B %Y").upper()
+    _dl_region = st.session_state.get("region_label", "").upper()
+    _dl_muted  = "#999999" if st.session_state.get("dark_mode") else "#666666"
+    st.markdown(
+        f'<div style="border-top:1px solid {_dl_muted};border-bottom:1px solid {_dl_muted};'
+        f'padding:5px 0;margin:10px 0;text-align:center;">'
+        f'<span style="font-variant:small-caps;font-size:0.75rem;letter-spacing:0.12em;color:{_dl_muted};">'
+        f'{_dl_date}&nbsp;&nbsp;·&nbsp;&nbsp;{_dl_region}'
+        f'</span></div>',
+        unsafe_allow_html=True,
+    )
 
     st.info(st.session_state.results_caption)
 
@@ -1035,12 +1107,6 @@ def _show_results():
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.caption(f"Logged in as **{st.session_state.user_email}**")
-    if st.button("Logout", use_container_width=True):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
-    st.divider()
     st.header("Scan Parameters")
     state    = st.selectbox("State / UT", sorted(REGIONS.keys()))
     district = st.selectbox("District", REGIONS[state])
