@@ -28,7 +28,7 @@ from ranker import rank_articles
 from deduplicator import deduplicate_all
 from translation import process_article
 from pdf_handler import fetch_article_content
-from feedback_store import record_promotion, get_profile_status, should_generate_profile
+from feedback_store import record_promotion, should_generate_profile
 from profile_analyzer import check_and_refresh_profile, load_client_profile
 from allowed_users import ALLOWED_EMAILS
 from auth import generate_otp, send_otp_email, verify_otp
@@ -935,19 +935,6 @@ with st.sidebar:
 
     scan_clicked = st.button("Scan News", type="primary", use_container_width=True)
 
-    # Learning status badge
-    try:
-        profile_status = get_profile_status(st.session_state.user_email)
-        if profile_status["status"] == "collecting":
-            days_active = profile_status.get("days_active", 0)
-            st.info(
-                f"**Learning Mode \u2014 Day {days_active} of 30**\n\n"
-                "Promote missed articles below to train your shortlist."
-            )
-        else:
-            st.success("**Your Personal Profile is Active**")
-    except Exception:
-        pass
 
     # Story Sources — only shown when results are available
     if "results_rows" in st.session_state and st.session_state.results_rows:
