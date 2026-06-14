@@ -745,6 +745,7 @@ def _render_article_table(rows: list, show_checkboxes: bool = False) -> None:
 
 def _show_results():
     """Render AI Shortlist section, Read All section, and Export to PDF."""
+    import pandas as pd
 
     st.info(st.session_state.results_caption)
 
@@ -807,62 +808,67 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            # Hidden text input — JS writes checked links here to trigger a rerun
-            _raw_selection = st.text_input(
-                "article_selection_state",
-                value="",
-                key="article_selection_state",
-                label_visibility="collapsed",
-                placeholder="__article_selection__",
-            )
-
-            _render_article_table(non_shortlist, show_checkboxes=True)
-
-            # Sticky floating button + JS that reads checkboxes and updates the hidden input
+            # JS: use a MutationObserver so the sticky class survives Streamlit re-renders
             st.markdown("""
 <style>
-#_ps_add_btn {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
-    z-index: 9999;
-    background-color: #FF4B4B;
-    color: white;
-    border: none;
-    padding: 12px 28px;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+.ps-sticky-btn {
+    position: fixed !important;
+    bottom: 30px !important;
+    right: 30px !important;
+    z-index: 9999 !important;
 }
-#_ps_add_btn:hover { background-color: #cc3a3a; }
+.ps-sticky-btn button {
+    background-color: #FF4B4B !important;
+    color: white !important;
+    padding: 12px 28px !important;
+    border-radius: 8px !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35) !important;
+    border: none !important;
+}
 </style>
-<button id="_ps_add_btn" onclick="_psAddToShortlist()">Add to Shortlist</button>
 <script>
-function _psAddToShortlist() {
-    var checked = Array.from(
-        document.querySelectorAll('.article-check:checked')
-    ).map(function(cb) { return cb.value; });
-    if (checked.length === 0) {
-        alert('Check at least one article first.');
-        return;
+(function() {
+    function tagBtn() {
+        var btns = document.querySelectorAll('button');
+        for (var i = 0; i < btns.length; i++) {
+            if (btns[i].textContent.trim() === 'Add to Shortlist') {
+                var wrap = btns[i].closest('[data-testid="stButton"]');
+                if (wrap && !wrap.classList.contains('ps-sticky-btn')) {
+                    wrap.classList.add('ps-sticky-btn');
+                }
+                return;
+            }
+        }
     }
-    var inp = document.querySelector('input[placeholder="__article_selection__"]');
-    if (!inp) { alert('Selection input not found. Refresh and try again.'); return; }
-    var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    setter.call(inp, JSON.stringify(checked));
-    inp.dispatchEvent(new Event('input', { bubbles: true }));
-}
+    tagBtn();
+    new MutationObserver(tagBtn).observe(document.body, { childList: true, subtree: true });
+})();
 </script>
 """, unsafe_allow_html=True)
 
-            # Process selections submitted by the sticky button
-            if _raw_selection:
-                try:
-                    selected_links = set(json.loads(_raw_selection))
-                except Exception:
-                    selected_links = set()
+            editor_rows = [
+                {"selected": False, **{c: row.get(c, "") for c in _COL_ORDER}}
+                for row in non_shortlist
+            ]
+            edit_df = pd.DataFrame(editor_rows)[["selected"] + list(_COL_ORDER)]
+            edited = st.data_editor(
+                edit_df,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "selected": st.column_config.CheckboxColumn("Add?", default=False),
+                    "Score":    st.column_config.NumberColumn("Score", format="%.1f"),
+                    "Headline": st.column_config.TextColumn("Headline", width="large"),
+                    "Summary":  st.column_config.TextColumn("Summary",  width="large"),
+                    "Link":     st.column_config.LinkColumn("Link", display_text="Read"),
+                },
+                key="all_articles_editor",
+            )
+
+            if st.button("Add to Shortlist", key="add_shortlist_btn"):
+                selected_links = set(edited.loc[edited["selected"] == True, "Link"].tolist())
                 count = 0
                 for row in non_shortlist:
                     if row.get("Link") in selected_links:
@@ -878,7 +884,6 @@ function _psAddToShortlist() {
                         if row not in st.session_state.shortlist_articles:
                             st.session_state.shortlist_articles.append(row)
                         count += 1
-                st.session_state["article_selection_state"] = ""
                 if count > 0:
                     st.success(f"{count} article{'s' if count != 1 else ''} added to your shortlist.")
                     st.rerun()
