@@ -385,6 +385,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             })
 
         df = pd.DataFrame(rows)
+        df["Score"] = df["Score"].apply(lambda x: round(float(x), 2))
 
         def _score_style(val):
             if val >= 8:
@@ -403,6 +404,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             styled,
             width="stretch",
             column_config={
+                "Score": st.column_config.NumberColumn("Score", format="%.2f"),
                 "YouTube Link": st.column_config.LinkColumn("YouTube Link", display_text="Watch"),
                 "Summary": st.column_config.TextColumn("Summary", width="large"),
                 "Title": st.column_config.TextColumn("Title", width="medium"),
