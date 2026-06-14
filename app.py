@@ -814,7 +814,6 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            # Sticky button CSS + JS
             st.markdown("""
 <style>
 .ps-sticky-btn {
@@ -833,9 +832,15 @@ def _show_results():
     box-shadow: 0 4px 14px rgba(0,0,0,0.35) !important;
     border: none !important;
 }
+/* Checkbox-only data editor: hide grid lines, match header height */
+.ps-chk-editor [data-testid="stDataEditor"] .ag-header { background: #2a2a2a !important; }
+.ps-chk-editor [data-testid="stDataEditor"] .ag-header-cell-label { color: white !important; justify-content: center !important; }
+.ps-chk-editor [data-testid="stDataEditor"] .ag-cell { display: flex !important; align-items: flex-start !important; justify-content: center !important; padding-top: 8px !important; }
+.ps-chk-editor [data-testid="stDataEditor"] .ag-row { border-bottom: 1px solid #444 !important; }
 </style>
 <script>
 (function() {
+    // --- Sticky button ---
     function tagBtn() {
         var btns = document.querySelectorAll('button');
         for (var i = 0; i < btns.length; i++) {
@@ -847,62 +852,81 @@ def _show_results():
             }
         }
     }
-    tagBtn();
-    new MutationObserver(tagBtn).observe(document.body, { childList: true, subtree: true });
+
+    // --- Row-height sync: match AG Grid rows to HTML table rows ---
+    var _busy = false;
+    function syncHeights() {
+        var tbl = document.querySelector('.ps-art-tbl');
+        var editor = document.querySelector('.ps-chk-editor [data-testid="stDataEditor"]');
+        if (!tbl || !editor) return;
+
+        // Sync header
+        var htmlHead = tbl.querySelector('thead tr');
+        var agHeader = editor.querySelector('.ag-header');
+        if (htmlHead && agHeader) {
+            var hh = htmlHead.offsetHeight;
+            agHeader.style.height = hh + 'px';
+            agHeader.style.minHeight = hh + 'px';
+            var agHeaderRow = editor.querySelector('.ag-header-row');
+            if (agHeaderRow) agHeaderRow.style.height = hh + 'px';
+        }
+
+        // Sync data rows
+        var htmlRows = Array.from(tbl.querySelectorAll('tbody tr'));
+        var agRows = Array.from(editor.querySelectorAll('.ag-row')).sort(function(a, b) {
+            return (parseInt(a.getAttribute('row-index')) || 0) - (parseInt(b.getAttribute('row-index')) || 0);
+        });
+        if (!htmlRows.length || !agRows.length || htmlRows.length !== agRows.length) return;
+
+        var top = 0;
+        for (var i = 0; i < htmlRows.length; i++) {
+            var h = htmlRows[i].offsetHeight;
+            if (h <= 0) return;
+            agRows[i].style.height    = h + 'px';
+            agRows[i].style.minHeight = h + 'px';
+            agRows[i].style.top       = top + 'px';
+            top += h;
+        }
+        ['ag-center-cols-container', 'ag-body-viewport', 'ag-body'].forEach(function(cls) {
+            var el = editor.querySelector('.' + cls);
+            if (el) el.style.minHeight = top + 'px';
+        });
+    }
+
+    function run() {
+        if (_busy) return;
+        _busy = true;
+        requestAnimationFrame(function() { tagBtn(); syncHeights(); _busy = false; });
+    }
+
+    run();
+    new MutationObserver(run).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 """, unsafe_allow_html=True)
 
-            # Header row: "Add?" label beside column headers
-            col_h, col_d = st.columns([1, 18])
-            with col_h:
-                st.markdown(
-                    f"<div style='{_TH}background:#2a2a2a;color:white;"
-                    f"text-align:center;display:block;'>Add?</div>",
-                    unsafe_allow_html=True,
-                )
-            with col_d:
-                header_cells = "".join(f"<th style='{_TH}'>{c}</th>" for c in _COL_ORDER)
-                st.markdown(
-                    f"<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
-                    f"<thead><tr style='background:#2a2a2a;'>{header_cells}</tr></thead>"
-                    f"</table>",
-                    unsafe_allow_html=True,
-                )
+            # Left: checkbox-only data editor  |  Right: full HTML article table
+            col_chk, col_tbl = st.columns([1, 18])
 
-            # One st.columns pair per article — guarantees per-row checkbox alignment
-            checked_indices = []
-            for i, row in enumerate(non_shortlist):
-                col_chk, col_data = st.columns([1, 18])
-                with col_chk:
-                    if st.checkbox("", key=f"article_chk_{i}", label_visibility="collapsed"):
-                        checked_indices.append(i)
-                with col_data:
-                    cells = ""
-                    for col in _COL_ORDER:
-                        val = row.get(col, "") or ""
-                        if col == "Report Type":
-                            s = _BADGE_CSS.get(val, "")
-                            content = f'<span style="{s}">{val}</span>'
-                        elif col == "Link":
-                            content = f'<a href="{val}" target="_blank" style="color:#4da6ff;">Read</a>' if val else ""
-                        elif col == "Score":
-                            content = f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
-                        else:
-                            if col == "Summary" and val.startswith("What happened: "):
-                                val = val[len("What happened: "):]
-                            content = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                        cells += f"<td style='{_TD}'>{content}</td>"
-                    st.markdown(
-                        f"<table style='width:100%;border-collapse:collapse;"
-                        f"font-size:13px;border-bottom:1px solid #444;'>"
-                        f"<tbody><tr>{cells}</tr></tbody></table>",
-                        unsafe_allow_html=True,
-                    )
+            with col_chk:
+                st.markdown('<div class="ps-chk-editor">', unsafe_allow_html=True)
+                check_df = pd.DataFrame([{"Add?": False} for _ in non_shortlist])
+                edited_check = st.data_editor(
+                    check_df,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={"Add?": st.column_config.CheckboxColumn("Add?", default=False)},
+                    key="all_articles_editor",
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with col_tbl:
+                _render_article_table(non_shortlist, table_class="ps-art-tbl")
 
             if st.button("Add to Shortlist", key="add_shortlist_btn"):
+                selected_indices = edited_check.loc[edited_check["Add?"] == True].index.tolist()
                 count = 0
-                for idx in checked_indices:
+                for idx in selected_indices:
                     if idx < len(non_shortlist):
                         row = non_shortlist[idx]
                         article = {
@@ -917,9 +941,6 @@ def _show_results():
                         if row not in st.session_state.shortlist_articles:
                             st.session_state.shortlist_articles.append(row)
                         count += 1
-                # Clear checkbox states so indices don't shift onto wrong articles
-                for j in range(len(non_shortlist)):
-                    st.session_state.pop(f"article_chk_{j}", None)
                 if count > 0:
                     st.success(f"{count} article{'s' if count != 1 else ''} added to your shortlist.")
                     st.rerun()
