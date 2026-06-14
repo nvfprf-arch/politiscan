@@ -634,193 +634,246 @@ if DEV_MODE:
     st.session_state.user_email = "dev@test.com"
 
 if not st.session_state.get("logged_in"):
-    # Hide all Streamlit chrome on login page
-    st.markdown("""
+    # ── Edition + greeting by time of day (Python side) ──────────────────────
+    _hour = datetime.now().hour
+    if 5 <= _hour < 12:
+        _edition  = "Morning Edition"
+        _greeting = "Good morning"
+    elif 12 <= _hour < 17:
+        _edition  = "Afternoon Dispatch"
+        _greeting = "Welcome back"
+    elif 17 <= _hour < 21:
+        _edition  = "Evening Brief"
+        _greeting = "Good evening"
+    else:
+        _edition  = "Late Night Wire"
+        _greeting = "Still at it"
+
+    _today = datetime.now().strftime("%d %b %Y").upper()
+
+    st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap');
-    [data-testid='stSidebarNav'] {display: none;}
-    [data-testid='stSidebar'] {display: none;}
-    header {display: none;}
-    #MainMenu {display: none;}
-    footer {display: none;}
 
-    /* Full page background */
-    .stApp { background: #060607 !important; }
-    html, body { background: #060607 !important; }
+    [data-testid='stSidebarNav'] {{display: none;}}
+    [data-testid='stSidebar'] {{display: none;}}
+    header {{display: none;}}
+    #MainMenu {{display: none;}}
+    footer {{display: none;}}
 
-    /* Center layout */
-    .block-container {
+    .stApp {{ background: #060607 !important; }}
+    html, body {{ background: #060607 !important; }}
+
+    .block-container {{
         padding: 0 !important;
         max-width: 100% !important;
         min-height: 100vh !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
-    }
+    }}
 
-    [data-testid="stHorizontalBlock"] {
+    [data-testid="stHorizontalBlock"] {{
         align-items: center !important;
         min-height: 100vh !important;
         padding: 2rem 0 !important;
-    }
+    }}
 
-    /* Card column */
-    [data-testid="stHorizontalBlock"] > div:nth-child(2) {
-        background: #0e0e12 !important;
-        border: 0.5px solid #28282e !important;
-        border-radius: 14px !important;
-        padding: 2rem !important;
-    }
+    /* ── Newspaper card column ── */
+    [data-testid="stHorizontalBlock"] > div:nth-child(2) {{
+        background: #f5f1e8 !important;
+        border: 1px solid #c8c0a8 !important;
+        border-radius: 2px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        box-shadow: 0 0 0 5px #0d0d0f, 0 0 0 5.5px #1e1e22 !important;
+    }}
 
-    /* Input fields */
-    [data-testid="stTextInput"] input {
-        background: #080809 !important;
-        border: 0.5px solid #1e1e26 !important;
-        border-radius: 6px !important;
-        color: #909098 !important;
-        font-size: 13px !important;
-    }
+    /* ── Black top banner ── */
+    .ps-top-banner {{
+        background: #0d0d0f;
+        padding: 8px 20px 7px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }}
+    .ps-banner-label {{
+        font-size: 7px; color: #606060;
+        letter-spacing: 1.5px; text-transform: uppercase; font-family: sans-serif;
+    }}
+    .ps-banner-date {{
+        font-size: 7px; color: #505050;
+        font-family: sans-serif; letter-spacing: 0.5px;
+    }}
 
-    /* Primary button */
-    [data-testid="stButton"] > button[kind="primary"] {
-        background: #18181e !important;
-        border: 0.5px solid #2e2e38 !important;
-        border-radius: 6px !important;
-        color: #a0a0b0 !important;
-        font-size: 13px !important;
-        width: 100% !important;
-    }
-    [data-testid="stButton"] > button[kind="primary"]:hover {
-        background: #202028 !important;
-        border-color: #3a3a46 !important;
-    }
+    /* ── Masthead ── */
+    .ps-masthead {{
+        padding: 10px 20px 0;
+        background: #f5f1e8;
+        border-bottom: 3px double #1a1a1a;
+    }}
+    .ps-masthead-title {{
+        font-size: 34px; color: #0d0d0f;
+        letter-spacing: 5px;
+        font-family: 'IM Fell English', Georgia, serif;
+        text-align: center; line-height: 1; margin-bottom: 3px;
+    }}
+    .ps-masthead-rule {{ border: none; border-top: 0.5px solid #aaa; margin: 3px 0 0; }}
+    .ps-masthead-sub {{
+        font-size: 7px; color: #777; text-align: center;
+        letter-spacing: 2px; text-transform: uppercase;
+        padding: 3px 0 7px; font-family: sans-serif;
+    }}
 
-    /* Secondary button */
-    [data-testid="stButton"] > button[kind="secondary"] {
-        background: transparent !important;
-        border: 0.5px solid #1e1e26 !important;
-        border-radius: 6px !important;
-        color: #404050 !important;
+    /* ── Body padding ── */
+    .ps-card-body {{ padding: 14px 20px 12px; }}
+
+    /* ── Edition + typewriter headline ── */
+    .ps-edition-line {{
+        font-size: 9px; color: #888;
+        font-family: 'IM Fell English', Georgia, serif;
+        font-style: italic; margin-bottom: 2px;
+    }}
+    .ps-tag {{
+        font-size: 7px; letter-spacing: 1.5px; text-transform: uppercase;
+        color: #999; font-family: sans-serif; margin-bottom: 4px;
+        padding-bottom: 3px; border-bottom: 0.5px solid #ccc;
+    }}
+    .ps-hed {{
+        font-size: 24px; color: #0d0d0f;
+        font-family: 'IM Fell English', Georgia, serif;
+        line-height: 1.1; margin-bottom: 3px; min-height: 32px;
+    }}
+    .ps-hed-cursor {{
+        display: inline-block; width: 2px; height: 0.85em;
+        background: #0d0d0f; margin-left: 2px;
+        vertical-align: text-bottom;
+        animation: psCursorBlink 0.75s step-end infinite;
+    }}
+    @keyframes psCursorBlink {{ 0%,100%{{opacity:1}} 50%{{opacity:0}} }}
+
+    .ps-deck {{
+        font-size: 9.5px; color: #666;
+        font-family: 'IM Fell English', Georgia, serif;
+        font-style: italic; line-height: 1.55;
+        margin-bottom: 14px; padding-bottom: 12px;
+        border-bottom: 0.5px solid #ccc;
+    }}
+
+    /* ── Labels ── */
+    .ps-label {{
+        font-size: 8px; color: #777; letter-spacing: 0.8px;
+        text-transform: uppercase; font-family: sans-serif;
+        margin-bottom: 4px; display: block;
+    }}
+
+    /* ── Override Streamlit inputs for newspaper look ── */
+    [data-testid="stTextInput"] input {{
+        background: #fff !important;
+        border: 0.5px solid #bbb !important;
+        border-radius: 1px !important;
+        color: #222 !important;
         font-size: 12px !important;
-    }
+        font-family: 'IM Fell English', Georgia, serif !important;
+    }}
+    [data-testid="stTextInput"] input::placeholder {{
+        color: #bbb !important;
+        font-style: italic !important;
+    }}
 
-    /* Divider inside card */
-    .ps-divider { height: 0.5px; background: #1e1e24; margin: 0.75rem 0 1rem; }
+    /* ── Primary button — black ink ── */
+    [data-testid="stButton"] > button[kind="primary"] {{
+        background: #0d0d0f !important;
+        border: none !important;
+        border-radius: 1px !important;
+        color: #f5f1e8 !important;
+        font-size: 12px !important;
+        font-family: 'IM Fell English', Georgia, serif !important;
+        letter-spacing: 0.5px !important;
+        width: 100% !important;
+    }}
+    [data-testid="stButton"] > button[kind="primary"]:hover {{
+        background: #222 !important;
+    }}
 
-    /* Brand block */
-    .ps-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 1.25rem; }
-    .ps-brand-icon {
-        width: 30px; height: 30px; background: #141418;
-        border: 0.5px solid #2a2a30; border-radius: 7px;
-        display: flex; align-items: center; justify-content: center; font-size: 15px;
-        flex-shrink: 0;
-    }
-    .ps-brand-name { font-size: 14px; font-weight: 500; color: #c8cdd8; display: block; }
-    .ps-brand-sub { font-size: 9px; color: #38383f; letter-spacing: 0.8px; text-transform: uppercase; display: block; }
+    /* ── Secondary button ── */
+    [data-testid="stButton"] > button[kind="secondary"] {{
+        background: transparent !important;
+        border: 0.5px solid #bbb !important;
+        border-radius: 1px !important;
+        color: #888 !important;
+        font-size: 11px !important;
+        font-family: 'IM Fell English', Georgia, serif !important;
+    }}
 
-    /* Heading */
-    .ps-heading { font-size: 18px; font-weight: 500; color: #b8c0d0; margin-bottom: 0.15rem; }
-    .ps-subheading { font-size: 11px; color: #38383f; margin-bottom: 1rem; }
+    /* ── OTP notice ── */
+    .ps-notice {{
+        font-size: 10px; color: #555;
+        font-family: 'IM Fell English', Georgia, serif;
+        font-style: italic; padding: 7px 10px;
+        background: #ede9df; border: 0.5px solid #ccc;
+        border-radius: 1px; margin-bottom: 6px; line-height: 1.4;
+    }}
 
-    /* Label above inputs */
-    .ps-label { font-size: 11px; color: #505058; margin-bottom: 3px; display: block; }
+    .ps-col-rule {{ height: 0.5px; background: #ccc; margin: 8px 0 10px; }}
 
-    /* OTP notice */
-    .ps-notice {
-        display: flex; align-items: flex-start; gap: 7px;
-        padding: 8px 10px; background: #0c0c10;
-        border: 0.5px solid #1e1e28; border-radius: 6px;
-        margin-bottom: 0.75rem; font-size: 11px; color: #505058; line-height: 1.4;
-    }
-
-    /* Card footer */
-    .ps-card-footer {
-        margin-top: 1rem; padding-top: 0.75rem;
-        border-top: 0.5px solid #161620;
+    /* ── Footer ── */
+    .ps-card-footer {{
+        padding: 9px 20px 14px;
+        border-top: 1px solid #ccc;
+        background: #ede9df;
         display: flex; justify-content: space-between;
-        font-size: 10px; color: #242430;
-    }
-
-    /* Newspaper background — injected directly into body by JS */
-    #ps-bg-root {
-        position: fixed; inset: 0; overflow: hidden;
-        opacity: 0.16; padding: 8px;
-        pointer-events: none; z-index: 0;
-    }
-    .ps-bg-inner {
-        display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0;
-        animation: psBgScroll 65s linear infinite;
-    }
-    @keyframes psBgScroll { from{transform:translateY(0)} to{transform:translateY(-50%)} }
-    .ps-bg-col { padding: 0 10px; border-right: 0.5px solid #ffffff15; }
-    .ps-bg-col:last-child { border-right: none; }
-    .ps-bg-story { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 0.5px solid #ffffff08; }
-    .ps-bg-tag { font-size: 7px; letter-spacing: 1.2px; text-transform: uppercase; color: #fff; font-weight: 500; margin-bottom: 3px; }
-    .ps-bg-hed { font-size: 11px; color: #fff; line-height: 1.35; margin-bottom: 3px; font-family: 'IM Fell English', Georgia, serif; }
-    .ps-bg-byline { font-size: 8px; color: #aaa; margin-bottom: 3px; font-style: italic; font-family: 'IM Fell English', Georgia, serif; }
-    .ps-bg-body { font-size: 9px; color: #888; line-height: 1.6; }
-
-    /* Make sure stApp and its children don't create a new stacking context that clips our bg */
-    .stApp { isolation: auto !important; }
+    }}
+    .ps-footer-text {{ font-size: 7.5px; color: #999; font-family: sans-serif; }}
     </style>
 
-    <!-- Background injected by JS directly into body -->
+    <!-- Typewriter script -->
     <script>
-    const PS_STORIES = [
-      {tag:"ELECTION",hed:"Election Commission issues formal notice for five state assembly by-elections; polling dates announced",byline:"Bureau Chief · New Delhi",body:"Opposition parties have raised concerns over timing, demanding the model code of conduct be enforced immediately across all affected constituencies."},
-      {tag:"CABINET",hed:"PM holds unscheduled security council meeting; Defence Minister summoned from overseas visit",byline:"North Block Correspondent · New Delhi",body:"An emergency session of the Cabinet Committee on Security was convened. Three service chiefs and the NSA were present. No official readout was issued."},
-      {tag:"ALLIANCE",hed:"INDIA bloc seat-sharing deadlock enters third week; Bihar and UP remain unresolved",byline:"Political Bureau · Kolkata",body:"Senior leaders from seven opposition parties failed to reach consensus on seat allocation in Bihar, UP, and Maharashtra ahead of the general election schedule."},
-      {tag:"PROTEST",hed:"Wrestlers threaten indefinite dharna outside Parliament if WFI chief not removed by Friday",byline:"Sports Desk · New Delhi",body:"Four Olympic-medal-winning athletes announced they will camp outside Parliament from Monday unless the government acts on pending harassment complaints."},
-      {tag:"GOVERNANCE",hed:"Supreme Court stays Madhya Pradesh OBC reservation hike pending fresh census data review",byline:"Legal Correspondent · New Delhi",body:"A bench of three judges issued an interim stay on the notification raising OBC reservation to 35 percent, seeking fresh affidavits within four weeks."},
-      {tag:"SCANDAL",hed:"CBI names sitting MLA in disproportionate assets case; arrest expected within 48 hours",byline:"Investigative Bureau · Bhopal",body:"The CBI filed a supplementary chargesheet naming a sitting MLA in a case involving assets worth Rs 180 crore beyond known income sources."},
-      {tag:"ELECTION",hed:"Andhra CM announces freebies worth Rs 8,000 crore days before model code of conduct kicks in",byline:"State Correspondent · Amaravati",body:"The ruling party unveiled a package covering free gas cylinders, cash transfers, and subsidised rice. Opposition has complained to the Election Commission."},
-      {tag:"PARTY",hed:"Nitish Kumar skips NDA coordination meeting for second consecutive week; speculation mounts",byline:"Political Correspondent · Patna",body:"The Bihar CM's continued absence from alliance meetings has triggered fresh speculation about JD(U)'s long-term commitment to the NDA."},
-      {tag:"POLICY",hed:"Centre notifies rules capping political ad spend on digital platforms at Rs 1 crore per week",byline:"Policy Reporter · New Delhi",body:"The Ministry of Electronics issued the gazette notification. Social media platforms given 30 days to implement the spending-cap enforcement mechanisms."},
-      {tag:"ALLIANCE",hed:"Shiv Sena factions file competing petitions over party symbol ahead of Maharashtra polls",byline:"Legal Bureau · Mumbai",body:"Both the Shinde and Thackeray camps have approached the Election Commission with fresh evidence in the ongoing bow-and-arrow symbol dispute."},
-      {tag:"CABINET",hed:"Kerala CM reshuffles three departments; senior IAS officer moved out of home ministry",byline:"State Bureau · Thiruvananthapuram",body:"The reshuffle is seen as an attempt to address party worker complaints about administrative functioning ahead of local body elections."},
-      {tag:"ELECTION",hed:"JMM releases first candidate list; women nominees raised to 30 percent of total contested seats",byline:"Eastern Bureau · Ranchi",body:"Jharkhand Mukti Morcha's first list signals a significant shift in voter outreach with a substantially higher proportion of women than the previous cycle."},
-    ];
-    function psBuildBg() {
-      if (document.getElementById('ps-bg-root')) return;
-      const doubled = [...PS_STORIES, ...PS_STORIES];
-      const third = Math.ceil(doubled.length / 3);
-      let colsHtml = '';
-      for (let c = 0; c < 3; c++) {
-        const slice = doubled.slice(c * third, (c+1) * third);
-        colsHtml += '<div class="ps-bg-col">' + slice.map(s =>
-          `<div class="ps-bg-story"><div class="ps-bg-tag">${s.tag}</div><div class="ps-bg-hed">${s.hed}</div><div class="ps-bg-byline">${s.byline}</div><div class="ps-bg-body">${s.body}</div></div>`
-        ).join('') + '</div>';
-      }
-      const root = document.createElement('div');
-      root.id = 'ps-bg-root';
-      root.innerHTML = '<div class="ps-bg-inner">' + colsHtml + '</div>';
-      document.body.insertBefore(root, document.body.firstChild);
-    }
-    document.addEventListener('DOMContentLoaded', psBuildBg);
-    setTimeout(psBuildBg, 300);
-    setTimeout(psBuildBg, 1000);
+    function psTypewriter() {{
+        const greeting = "{_greeting}";
+        const el = document.getElementById('ps-tw-text');
+        const cursor = document.getElementById('ps-tw-cursor');
+        if (!el) {{ setTimeout(psTypewriter, 200); return; }}
+        let i = 0;
+        function type() {{
+            if (i <= greeting.length) {{
+                el.textContent = greeting.slice(0, i);
+                i++;
+                setTimeout(type, i === 1 ? 500 : 75);
+            }} else {{
+                setTimeout(() => {{ if(cursor) cursor.style.display = 'none'; }}, 2500);
+            }}
+        }}
+        setTimeout(type, 400);
+    }}
+    document.addEventListener('DOMContentLoaded', psTypewriter);
+    setTimeout(psTypewriter, 300);
     </script>
 
+    <!-- Card top: banner + masthead + body header -->
+    <div class="ps-top-banner">
+        <span class="ps-banner-label">Political Intelligence · {_edition}</span>
+        <span class="ps-banner-date">{_today}</span>
+    </div>
+    <div class="ps-masthead">
+        <div class="ps-masthead-title">PolitiScan</div>
+        <hr class="ps-masthead-rule"/>
+        <div class="ps-masthead-sub">Secure Access · Authorised Correspondents Only</div>
+    </div>
+    <div class="ps-card-body">
+        <div class="ps-tag">Correspondent Access</div>
+        <div class="ps-edition-line">{_edition} ·</div>
+        <div class="ps-hed">
+            <span id="ps-tw-text"></span><span id="ps-tw-cursor" class="ps-hed-cursor"></span>
+        </div>
+        <div class="ps-deck">Sign in to access your political intelligence dashboard. For authorised correspondents only.</div>
+    </div>
     """, unsafe_allow_html=True)
 
-    # Three columns: spacer | card | spacer — wider card ratio
+    # ── Streamlit inputs inside the card column ───────────────────────────────
     _, card_col, _ = st.columns([1, 1.2, 1])
 
     with card_col:
-        # Brand header
-        st.markdown("""
-        <div class="ps-brand">
-          <div class="ps-brand-icon">🗳️</div>
-          <div>
-            <span class="ps-brand-name">PolitiScan</span>
-            <span class="ps-brand-sub">Political Intelligence</span>
-          </div>
-        </div>
-        <div class="ps-divider"></div>
-        <div class="ps-heading">Welcome back</div>
-        <div class="ps-subheading">Sign in to access your intelligence dashboard</div>
-        """, unsafe_allow_html=True)
-
         if not st.session_state.get("otp_sent"):
             st.markdown('<span class="ps-label">Work email</span>', unsafe_allow_html=True)
             email = st.text_input(
@@ -844,9 +897,10 @@ if not st.session_state.get("logged_in"):
                         st.error(f"Failed to send OTP: {send_err}")
         else:
             st.markdown(
-                f'<div class="ps-notice">🕐 &nbsp; Code sent to {st.session_state.login_email} · expires in 10 min</div>',
+                f'<div class="ps-notice">🕐 &nbsp; Code dispatched to {st.session_state.login_email} · expires in 10 min</div>',
                 unsafe_allow_html=True,
             )
+            st.markdown('<div class="ps-col-rule"></div>', unsafe_allow_html=True)
             st.markdown('<span class="ps-label">6-digit code</span>', unsafe_allow_html=True)
             code = st.text_input(
                 "6-digit code", max_chars=6, key="otp_input",
@@ -874,8 +928,8 @@ if not st.session_state.get("logged_in"):
 
         st.markdown("""
         <div class="ps-card-footer">
-          <span>🔒 Secure · Authorised users only</span>
-          <span>v4.0</span>
+          <span class="ps-footer-text">🔒 Secure · Authorised users only</span>
+          <span class="ps-footer-text">v4.0</span>
         </div>
         """, unsafe_allow_html=True)
 
