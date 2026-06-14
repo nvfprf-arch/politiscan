@@ -154,17 +154,8 @@ with st.sidebar:
 
     scan_button = st.button("Scan and Rank", type="primary", use_container_width=True)
 
-    tag_filter = []
     report_type_filter = ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
     if "yt_results" in st.session_state and st.session_state["yt_results"]:
-        all_tags = sorted({
-            v.get("primary_tag", "")
-            for v in st.session_state["yt_results"]
-            if v.get("primary_tag")
-        })
-        if all_tags:
-            tag_filter = st.multiselect("Filter by Tag", all_tags)
-
         _rt_all = "All Report Types"
         _rt_options = [_rt_all, "CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
 
@@ -370,10 +361,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
     meta = st.session_state["yt_summary"]
     results = st.session_state["yt_results"]
 
-    display_results = (
-        [v for v in results if v.get("primary_tag") in tag_filter]
-        if tag_filter else results
-    )
+    display_results = results
     if report_type_filter:
         display_results = [
             v for v in display_results
@@ -429,6 +417,9 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             .apply(_style_report_type, subset=["Report Type"])
         )
 
+        display_df = df[["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"]]
+        table_height = min(len(display_df) * 100 + 50, 1200)
+
         st.dataframe(
             styled,
             column_config={
@@ -439,8 +430,9 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             },
             column_order=["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"],
             hide_index=True,
-            height=800,
+            height=table_height,
             use_container_width=True,
+            wrap_text=True,
         )
 
     # ── PDF Report ────────────────────────────────────────────────────────────
