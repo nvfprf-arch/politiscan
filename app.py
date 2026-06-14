@@ -679,34 +679,37 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
                  text-transform:uppercase; color:#b0a080 !important; text-align:center;
                  margin-top:1.5rem; padding-top:0.75rem; border-top:0.5px solid #c8b898; }
 
-/* Inputs — transparent bg, underline only */
+/* Inputs — keep dark bg from Streamlit, just fix text to white */
 .block-container .stTextInput input {
-    background: transparent !important;
-    border: none !important;
-    border-bottom: 1.5px solid #1a1a1a !important;
-    border-radius: 0 !important;
-    color: #1a1a1a !important;
+    color: #ffffff !important;
     font-family: "Georgia","Times New Roman",serif !important;
     font-size: 14px !important;
-    box-shadow: none !important;
 }
-.block-container .stTextInput input::placeholder { color: #b0a080 !important; font-style: italic; }
-.block-container .stTextInput input:focus { border-bottom-color: #3a3020 !important; }
+.block-container .stTextInput input::placeholder { color: #9a8a6a !important; font-style: italic; }
 
-/* Buttons */
+/* Primary button — cream text on black bg */
 .block-container button[kind="primary"] {
     background: #1a1a1a !important; color: #f4efe3 !important;
-    border: none !important; border-radius: 0 !important;
+    border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;
     font-family: "Georgia","Times New Roman",serif !important;
     font-size: 10.5px !important; letter-spacing: 0.18em !important;
     text-transform: uppercase !important; width: 100% !important;
 }
+.block-container button[kind="primary"] p,
+.block-container button[kind="primary"] span {
+    color: #f4efe3 !important;
+}
+/* Secondary button — black outline, dark text */
 .block-container button[kind="secondary"] {
     background: transparent !important; color: #1a1a1a !important;
     border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;
     font-family: "Georgia","Times New Roman",serif !important;
     font-size: 10.5px !important; letter-spacing: 0.18em !important;
     text-transform: uppercase !important; width: 100% !important;
+}
+.block-container button[kind="secondary"] p,
+.block-container button[kind="secondary"] span {
+    color: #1a1a1a !important;
 }
 </style>
 """, unsafe_allow_html=True)
