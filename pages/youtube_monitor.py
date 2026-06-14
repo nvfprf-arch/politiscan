@@ -395,7 +395,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
                 "Channel": v.get("channel_name", ""),
                 "Views/hr": int(v.get("views_per_hour", 0)),
                 "Upload Time": v.get("published_at", "")[:16].replace("T", " "),
-                "Summary": re.sub(r'^\*\*Summary[:\s]*\*\*\s*', '', v.get("summary", "").removeprefix("## Summary").removeprefix("## ")).lstrip(),
+                "Summary": (lambda s: s[:300] + "..." if len(s) > 300 else s)(re.sub(r'^\*\*Summary[:\s]*\*\*\s*', '', v.get("summary", "").removeprefix("## Summary").removeprefix("## ")).lstrip()),
                 "Report Type": v.get("report_type", "CONFIRMED"),
                 "Signals": _truncate_signals(v.get("speculation_signals", [])),
                 "YouTube Link": v.get("youtube_url", ""),
@@ -417,19 +417,20 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             .apply(_style_report_type, subset=["Report Type"])
         )
 
-        display_df = df[["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"]]
-        table_height = min(len(display_df) * 120 + 50, 1400)
+        display_df = df[["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"]].copy()
+        table_height = len(display_df) * 80 + 40
 
-        st.dataframe(
-            styled,
+        st.data_editor(
+            display_df,
             column_config={
                 "Score": st.column_config.NumberColumn("Score", format="%.2f"),
                 "YouTube Link": st.column_config.LinkColumn("YouTube Link", display_text="Watch"),
                 "Title": st.column_config.TextColumn("Title", width="large"),
                 "Summary": st.column_config.TextColumn("Summary", width="large"),
             },
-            column_order=["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"],
             hide_index=True,
+            disabled=True,
+            num_rows="fixed",
             height=table_height,
             use_container_width=True,
         )
