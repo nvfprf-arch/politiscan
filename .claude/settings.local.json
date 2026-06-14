@@ -9,7 +9,14 @@
       "Bash(git -C \"C:\\\\Users\\\\ARUNDHATI\\\\politiscan\" log --oneline)",
       "Bash(winget upgrade:*)",
       "Bash(git push:*)",
-      "Skill(claude-api)"
+      "Skill(claude-api)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:www.youtube.com)",
+      "WebSearch",
+      "WebFetch(domain:socialblade.com)",
+      "WebFetch(domain:www.noxinfluencer.com)",
+      "WebFetch(domain:www.tunepocket.com)",
+      "WebFetch(domain:hypeauditor.com)"
     ]
   }
 }
