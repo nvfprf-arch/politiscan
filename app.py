@@ -808,15 +808,9 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 # App title (shown only when logged in)
 # ---------------------------------------------------------------------------
 
-# Rename the default sidebar nav labels ("app" → "News")
 st.markdown("""
 <style>
-[data-testid="stSidebarNavLink"]:first-child span { font-size: 0 !important; }
-[data-testid="stSidebarNavLink"]:first-child span::before {
-    content: "News";
-    font-size: 0.875rem;
-    visibility: visible;
-}
+section[data-testid="stSidebarNav"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1049,31 +1043,14 @@ def _show_results():
 
 with st.sidebar:
     st.markdown(
-        f'<p style="font-size:0.75rem;font-style:italic;color:#888;margin:0 0 4px 0;">'
+        f'<p style="font-size:0.75rem;font-style:italic;color:#888;margin:0 0 2px 0;line-height:1.3;">'
         f'{st.session_state.user_email}</p>',
         unsafe_allow_html=True,
     )
-    st.markdown("""
-<style>
-div[data-testid="stSidebar"] .logout-pill button {
-    font-size: 0.72rem !important;
-    padding: 2px 12px !important;
-    border-radius: 20px !important;
-    border: 1px solid #888 !important;
-    background: transparent !important;
-    color: #888 !important;
-    width: auto !important;
-    min-height: unset !important;
-    line-height: 1.4 !important;
-}
-</style>
-""", unsafe_allow_html=True)
-    st.markdown('<div class="logout-pill">', unsafe_allow_html=True)
-    if st.button("⎋ logout", key="sidebar_logout"):
+    if st.button("⎋ logout", key="sidebar_logout", use_container_width=False):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
     st.divider()
     st.header("Scan Parameters")
     state    = st.selectbox("State / UT", sorted(REGIONS.keys()))
