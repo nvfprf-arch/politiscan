@@ -384,13 +384,32 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
     if not display_results:
         st.info("No results match the current filters.")
     else:
+        # Compute relative percentile thresholds from this scan's views/hr values
+        _vph_values = [v.get("views_per_hour", 0) for v in display_results if v.get("views_per_hour", 0) > 0]
+        if len(_vph_values) >= 2:
+            _vph_sorted = sorted(_vph_values)
+            _n = len(_vph_sorted)
+            _p80 = _vph_sorted[int(_n * 0.80)]
+            _p50 = _vph_sorted[int(_n * 0.50)]
+        else:
+            _p80 = _p50 = None
+
+        def _relevance_label(vph):
+            if not vph or _p80 is None:
+                return ""
+            if vph >= _p80:
+                return "Viral"
+            if vph >= _p50:
+                return "Rising"
+            return "Active"
+
         rows = []
         for rank_idx, v in enumerate(display_results, 1):
             rows.append({
                 "Rank": rank_idx,
                 "Score": round(v.get("final_score", 0), 2),
                 "Tag": v.get("primary_tag", ""),
-                "Relevance": "Viral" if v.get("engagement_velocity_score", 0) >= 2 else "Rising" if v.get("engagement_velocity_score", 0) >= 0.5 else "Active" if v.get("engagement_velocity_score", 0) >= 0.1 else "",
+                "Relevance": _relevance_label(v.get("views_per_hour", 0)),
                 "Title": v.get("title", ""),
                 "Channel": v.get("channel_name", ""),
                 "Views/hr": int(v.get("views_per_hour", 0)),
