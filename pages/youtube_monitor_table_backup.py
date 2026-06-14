@@ -381,49 +381,54 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
         )
     st.markdown(stats_md)
 
-    _BADGE = {
-        "CONFIRMED":   ('<span style="background:#1a472a;color:white;padding:2px 8px;border-radius:4px;font-size:0.8em">CONFIRMED</span>'),
-        "SPECULATIVE": ('<span style="background:#7d4e00;color:white;padding:2px 8px;border-radius:4px;font-size:0.8em">SPECULATIVE</span>'),
-        "ANALYTICAL":  ('<span style="background:#1a3a5c;color:white;padding:2px 8px;border-radius:4px;font-size:0.8em">ANALYTICAL</span>'),
-    }
-
     if not display_results:
         st.info("No results match the current filters.")
     else:
+        rows = []
         for rank_idx, v in enumerate(display_results, 1):
-            title       = v.get("title", "")
-            report_type = v.get("report_type", "CONFIRMED")
-            score       = round(v.get("final_score", 0), 2)
-            channel     = v.get("channel_name", "")
-            views_hr    = int(v.get("views_per_hour", 0))
-            evs         = v.get("engagement_velocity_score", 0)
-            relevance   = "Viral" if evs >= 2 else "Rising" if evs >= 0.5 else "Active" if evs >= 0.1 else ""
-            youtube_url = v.get("youtube_url", "")
-            full_summary = re.sub(
-                r'^\*\*Summary[:\s]*\*\*\s*',
-                '',
-                v.get("summary", "").removeprefix("## Summary").removeprefix("## "),
-            ).lstrip()
+            rows.append({
+                "Rank": rank_idx,
+                "Score": round(v.get("final_score", 0), 2),
+                "Tag": v.get("primary_tag", ""),
+                "Relevance": "Viral" if v.get("engagement_velocity_score", 0) >= 2 else "Rising" if v.get("engagement_velocity_score", 0) >= 0.5 else "Active" if v.get("engagement_velocity_score", 0) >= 0.1 else "",
+                "Title": v.get("title", ""),
+                "Channel": v.get("channel_name", ""),
+                "Views/hr": int(v.get("views_per_hour", 0)),
+                "Upload Time": v.get("published_at", "")[:16].replace("T", " "),
+                "Summary": (lambda s: s[:300] + "..." if len(s) > 300 else s)(re.sub(r'^\*\*Summary[:\s]*\*\*\s*', '', v.get("summary", "").removeprefix("## Summary").removeprefix("## ")).lstrip()),
+                "Report Type": v.get("report_type", "CONFIRMED"),
+                "Signals": _truncate_signals(v.get("speculation_signals", [])),
+                "YouTube Link": v.get("youtube_url", ""),
+            })
 
-            with st.container(border=True):
-                row1_left, row1_mid, row1_right = st.columns([1, 6, 2])
-                with row1_left:
-                    st.markdown(f"### #{rank_idx}")
-                    st.markdown(f"**Score:** {score:.2f}")
-                with row1_mid:
-                    st.markdown(f"**{title}**")
-                with row1_right:
-                    badge = _BADGE.get(report_type, _BADGE["CONFIRMED"])
-                    st.markdown(badge, unsafe_allow_html=True)
+        df = pd.DataFrame(rows)
+        df["Score"] = df["Score"].apply(lambda x: round(float(x), 2))
 
-                st.write(full_summary)
+        def _score_style(val):
+            if val >= 8:
+                return "background-color: #ff4b4b; color: white"
+            if val >= 6:
+                return "background-color: #ffa500"
+            return ""
 
-                meta_parts = [f"**{channel}**", f"{views_hr:,} views/hr"]
-                if relevance:
-                    meta_parts.append(relevance)
-                if youtube_url:
-                    meta_parts.append(f'<a href="{youtube_url}" target="_blank">Watch</a>')
-                st.markdown(" &nbsp;|&nbsp; ".join(meta_parts), unsafe_allow_html=True)
+        styled = (
+            df.style
+            .map(_score_style, subset=["Score"])
+            .apply(_style_report_type, subset=["Report Type"])
+        )
+
+        st.dataframe(
+            styled,
+            column_config={
+                "Score": st.column_config.NumberColumn("Score", format="%.2f"),
+                "YouTube Link": st.column_config.LinkColumn("YouTube Link", display_text="Watch"),
+                "Title": st.column_config.TextColumn("Title", width="medium"),
+                "Summary": st.column_config.TextColumn("Summary", width="large"),
+            },
+            column_order=["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"],
+            hide_index=True,
+            use_container_width=True,
+        )
 
     # ── PDF Report ────────────────────────────────────────────────────────────
     st.divider()
