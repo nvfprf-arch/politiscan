@@ -853,20 +853,28 @@ with st.sidebar:
     state    = st.selectbox("State / UT", sorted(REGIONS.keys()))
     district = st.selectbox("District", REGIONS[state])
 
-    state_outlet_options = STATE_OUTLETS.get(state, [])
+    state_outlet_options = ["All Outlets"] + STATE_OUTLETS.get(state, [])
 
     # Reset outlet selection when state changes
     if st.session_state.get("_outlets_for_state") != state:
         st.session_state["_outlets_for_state"] = state
-        st.session_state["_outlet_selection"] = state_outlet_options
+        st.session_state["_outlet_selection"] = ["All Outlets"]
+
+    _prev = st.session_state.get("_outlet_selection", ["All Outlets"])
+    # If user added a specific outlet alongside "All Outlets", drop "All Outlets"
+    if len(_prev) > 1 and "All Outlets" in _prev:
+        st.session_state["_outlet_selection"] = [o for o in _prev if o != "All Outlets"]
+    # If user cleared everything, reset to "All Outlets"
+    elif len(_prev) == 0:
+        st.session_state["_outlet_selection"] = ["All Outlets"]
 
     selected_outlets = st.multiselect(
         "News Outlets",
         options=state_outlet_options,
-        default=state_outlet_options,
+        default=["All Outlets"],
         key="_outlet_selection",
     )
-    active_outlets = selected_outlets
+    active_outlets = [] if selected_outlets == ["All Outlets"] else [o for o in selected_outlets if o != "All Outlets"]
 
     scan_clicked = st.button("Scan News", type="primary", use_container_width=True)
 
