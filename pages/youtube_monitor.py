@@ -371,9 +371,9 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
         for rank_idx, v in enumerate(display_results, 1):
             rows.append({
                 "Rank": rank_idx,
-                "Score": round(v.get("final_score", 0), 1),
+                "Score": round(v.get("final_score", 0), 2),
                 "Tag": v.get("primary_tag", ""),
-                "Velocity": "Viral" if v.get("engagement_velocity_score", 0) > 7 else "Rising" if v.get("engagement_velocity_score", 0) >= 5 else "Active" if v.get("engagement_velocity_score", 0) >= 3 else "",
+                "Relevance": "Viral" if v.get("engagement_velocity_score", 0) > 7 else "Rising" if v.get("engagement_velocity_score", 0) >= 5 else "Active" if v.get("engagement_velocity_score", 0) >= 3 else "",
                 "Title": v.get("title", ""),
                 "Channel": v.get("channel_name", ""),
                 "Views/hr": int(v.get("views_per_hour", 0)),
@@ -403,11 +403,11 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             styled,
             width="stretch",
             column_config={
-                "YouTube Link": st.column_config.LinkColumn("YouTube Link"),
+                "YouTube Link": st.column_config.LinkColumn("YouTube Link", display_text="Watch"),
                 "Summary": st.column_config.TextColumn("Summary", width="large"),
                 "Title": st.column_config.TextColumn("Title", width="medium"),
-                "Signals": st.column_config.TextColumn("Signals", width="medium"),
             },
+            column_order=["Rank", "Score", "Tag", "Relevance", "Title", "Channel", "Views/hr", "Summary", "Report Type", "YouTube Link"],
             hide_index=True,
         )
 
@@ -458,7 +458,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
         pdf.ln(6)
 
         for rank_idx, v in enumerate(display_results, 1):
-            score = round(v.get("final_score", 0), 1)
+            score = round(v.get("final_score", 0), 2)
             evs = v.get("engagement_velocity_score", 0)
             tag = _safe(v.get("primary_tag", ""))
             title = _safe(v.get("title", ""))
