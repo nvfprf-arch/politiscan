@@ -685,9 +685,12 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
                  margin:0.2rem 0 0.15rem 0; line-height:1.4; }
 .np-subhead    { font-family:"Georgia","Times New Roman",serif; font-size:11px;
                  font-style:italic; color:#7a6a4a !important; text-align:center; margin:0 0 0.5rem 0; }
-.np-label      { font-family:"Georgia","Times New Roman",serif; font-size:9px;
-                 letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important;
-                 display:block; margin-bottom:2px; margin-top:0.4rem; }
+.np-label,
+.block-container .stTextInput label {
+    font-family:"Georgia","Times New Roman",serif !important; font-size:9px !important;
+    letter-spacing:0.14em !important; text-transform:uppercase !important;
+    color:#7a6a4a !important; display:block !important; margin-bottom:2px !important; margin-top:0.4rem !important;
+}
 .np-section-divider { border:none; border-top:1px solid #c8b898; margin:0.4rem 0 0.3rem 0; }
 .np-otp-note   { font-family:"Georgia","Times New Roman",serif; font-size:11.5px;
                  font-style:italic; color:#7a6a4a !important; text-align:center; margin:0.3rem 0 0.2rem 0; }
@@ -744,12 +747,11 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
     ''', unsafe_allow_html=True)
 
     # Email — always visible
-    st.markdown('<div class="np-label">Email Address</div>', unsafe_allow_html=True)
     otp_sent = st.session_state.get("otp_sent", False)
 
     if not otp_sent:
-        email = st.text_input("Email Address", key="login_email_input",
-                              label_visibility="collapsed", placeholder="you@example.com")
+        email = st.text_input("EMAIL ADDRESS", key="login_email_input",
+                              label_visibility="visible", placeholder="you@example.com")
         if st.button("Send Verification Code", key="send_otp_btn"):
             if email not in ALLOWED_EMAILS:
                 st.error("Access denied. Contact your administrator.")
@@ -765,19 +767,16 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
                 else:
                     st.error(f"Failed to send OTP: {send_err}")
     else:
-        # Email locked
-        st.text_input("Email Address", value=st.session_state.login_email,
-                      key="login_email_display", label_visibility="collapsed", disabled=True)
-        # Send button stays — disabled
+        st.text_input("EMAIL ADDRESS", value=st.session_state.login_email,
+                      key="login_email_display", label_visibility="visible", disabled=True)
         st.button("Send Verification Code", key="send_otp_btn_disabled", disabled=True)
 
         st.markdown(
             f'<div class="np-otp-note">Code sent to {st.session_state.login_email} — enter the 6 digits below. Expires in 10 minutes.</div>'
             '<hr class="np-section-divider">',
             unsafe_allow_html=True)
-        st.markdown('<div class="np-label">Verification Code</div>', unsafe_allow_html=True)
-        code = st.text_input("Verification Code", max_chars=6, key="otp_input",
-                             label_visibility="collapsed", placeholder="······")
+        code = st.text_input("VERIFICATION CODE", max_chars=6, key="otp_input",
+                             label_visibility="visible", placeholder="······")
 
         if st.button("Verify & Enter", key="verify_btn"):
             if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
