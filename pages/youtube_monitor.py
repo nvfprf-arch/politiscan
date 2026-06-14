@@ -339,6 +339,15 @@ if scan_button:
     print(f"[YT] Step 7: ranking")
     ranked = rank_videos(videos_to_rank, "", "", ANTHROPIC_API_KEY)
     print(f"[YT] Step 7 done: {len(ranked)} ranked")
+    for _i, _v in enumerate(ranked[:3], 1):
+        print(
+            f"[YT] Video {_i}: title={_v.get('title','')[:50]!r} | "
+            f"importance={_v.get('importance_score')} | "
+            f"engagement_velocity={_v.get('engagement_velocity_score')} | "
+            f"recency={_v.get('recency_score')} | "
+            f"source_score={_v.get('source_score')} | "
+            f"final={_v.get('final_score')}"
+        )
 
     # Step 8: Summarize in parallel
     status_box.info(f"Step 7/7 — Summarizing {len(ranked)} ranked videos...")

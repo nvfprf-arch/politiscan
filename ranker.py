@@ -146,11 +146,11 @@ def rank_articles(
 
 def _process_video(video: dict, state: str, district: str, api_key: str) -> dict | None:
     """Run the full pipeline for one video, incorporating engagement_score."""
-    headline        = video.get("headline", "")
+    headline        = video.get("headline") or video.get("title", "")
     snippet         = video.get("snippet") or video.get("content", "")
-    source_name     = video.get("source_name", "")
-    published       = video.get("published_iso", "")
-    engagement_score = float(video.get("engagement_score", 5.0))
+    source_name     = video.get("source_name") or video.get("channel_name", "")
+    published       = video.get("published_iso") or video.get("published_at", "")
+    engagement_score = float(video.get("engagement_score") or video.get("engagement_velocity_score") or 5.0)
 
     # Step 1 — importance score
     imp = score_importance(headline, snippet, source_name, published, state, district, api_key)
