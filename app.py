@@ -681,7 +681,7 @@ if "profile_loaded" not in st.session_state:
     st.session_state.profile_loaded = True
 
 
-_COL_ORDER = ["Rank", "Score", "Tag", "Report Type",
+_COL_ORDER = ["Rank", "Score", "Report Type",
               "Headline", "Sources", "Language", "Summary", "Link"]
 
 _TYPE_STYLES = {
@@ -724,12 +724,9 @@ def _show_results():
 
     all_rows       = st.session_state.results_rows
     total_political = len(all_rows)
-    selected_tags  = st.session_state.get("selected_tags", [])
     selected_types = st.session_state.get("selected_report_types", ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"])
 
     filtered = all_rows
-    if selected_tags:
-        filtered = [r for r in filtered if r.get("Tag") in selected_tags]
     if selected_types:
         filtered = [r for r in filtered if r.get("_report_type", "CONFIRMED") in selected_types]
 
@@ -892,19 +889,10 @@ with st.sidebar:
     except Exception:
         pass
 
-    # Tag filter + Story Sources — only shown when results are available
+    # Story Sources — only shown when results are available
     if "results_rows" in st.session_state and st.session_state.results_rows:
         st.divider()
         st.subheader("Filter Results")
-        available_tags = sorted({r.get("Tag", "") for r in st.session_state.results_rows if r.get("Tag")})
-        selected_tags = st.multiselect(
-            "Tag Filter",
-            options=available_tags,
-            default=st.session_state.get("selected_tags", []),
-            placeholder="Show all tags",
-        )
-        st.session_state.selected_tags = selected_tags
-
         selected_report_types = st.multiselect(
             "Show Report Types",
             options=["CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
@@ -936,7 +924,7 @@ with st.sidebar:
 if scan_clicked:
     # Clear previous results so a fresh scan always re-runs fully
     for key in ("results_rows", "results_caption", "pdf_buffer", "pdf_filename",
-                "selected_tags", "selected_report_types", "source_breakdown",
+                "selected_report_types", "source_breakdown",
                 "shortlist_articles", "show_all_articles"):
         st.session_state.pop(key, None)
 
