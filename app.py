@@ -805,10 +805,71 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
     st.stop()
 
 # ---------------------------------------------------------------------------
-# App title (shown only when logged in)
+# Top bar (shown only when logged in)
 # ---------------------------------------------------------------------------
-st.title("PolitiScan")
-st.markdown("#### Political Intelligence Dashboard")
+
+# Initialise active page in session state
+if "active_page" not in st.session_state:
+    st.session_state.active_page = "News"
+
+st.markdown("""
+<style>
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0 14px 0;
+    border-bottom: 1.5px solid #1a1a1a;
+    margin-bottom: 18px;
+}
+.topbar-logo {
+    font-family: "Georgia","Times New Roman",serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1a;
+    letter-spacing: -0.5px;
+}
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "Georgia","Times New Roman",serif;
+    font-size: 12px;
+    color: #7a6a4a;
+}
+</style>
+<div class="topbar">
+    <div class="topbar-logo">PolitiScan</div>
+    <div class="topbar-right" id="topbar-right-placeholder"></div>
+</div>
+""", unsafe_allow_html=True)
+
+# Toggle and logout rendered as Streamlit buttons in columns
+tb_col1, tb_col2, tb_col3, tb_col4, tb_col5 = st.columns([3, 1, 1, 2, 1])
+
+with tb_col2:
+    if st.button("📰 News", key="nav_news",
+                 type="primary" if st.session_state.active_page == "News" else "secondary"):
+        st.session_state.active_page = "News"
+        st.rerun()
+
+with tb_col3:
+    if st.button("▶ YouTube", key="nav_yt",
+                 type="primary" if st.session_state.active_page == "YouTube" else "secondary"):
+        st.session_state.active_page = "YouTube"
+        st.rerun()
+
+with tb_col4:
+    st.markdown(
+        f"<div style='font-family:Georgia,serif;font-size:12px;color:#7a6a4a;"
+        f"text-align:right;padding-top:6px;'>{st.session_state.get('user_email','')}</div>",
+        unsafe_allow_html=True
+    )
+
+with tb_col5:
+    if st.button("Logout", key="logout_btn"):
+        st.session_state.logged_in = False
+        st.rerun()
 
 # Load/refresh client profile once per session
 if "profile_loaded" not in st.session_state:
@@ -1035,12 +1096,6 @@ def _show_results():
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.caption(f"Logged in as **{st.session_state.user_email}**")
-    if st.button("Logout", use_container_width=True):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
-    st.divider()
     st.header("Scan Parameters")
     state    = st.selectbox("State / UT", sorted(REGIONS.keys()))
     district = st.selectbox("District", REGIONS[state])
