@@ -724,11 +724,11 @@ def _show_results():
 
     all_rows       = st.session_state.results_rows
     total_political = len(all_rows)
-    selected_types = st.session_state.get("selected_report_types", ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"])
+    selected_type = st.session_state.get("selected_report_types", "All Report Types")
 
     filtered = all_rows
-    if selected_types:
-        filtered = [r for r in filtered if r.get("_report_type", "CONFIRMED") in selected_types]
+    if selected_type and selected_type != "All Report Types":
+        filtered = [r for r in filtered if r.get("_report_type", "CONFIRMED") == selected_type]
 
     filtered = sorted(filtered, key=lambda r: r.get("_client_adjusted_score", r.get("Score", 0)), reverse=True)
     for i, r in enumerate(filtered, start=1):
@@ -893,12 +893,14 @@ with st.sidebar:
     if "results_rows" in st.session_state and st.session_state.results_rows:
         st.divider()
         st.subheader("Filter Results")
-        selected_report_types = st.multiselect(
+        selected_report_type = st.selectbox(
             "Show Report Types",
-            options=["CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
-            default=st.session_state.get("selected_report_types", ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"]),
+            options=["All Report Types", "CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
+            index=["All Report Types", "CONFIRMED", "SPECULATIVE", "ANALYTICAL"].index(
+                st.session_state.get("selected_report_types", "All Report Types")
+            ),
         )
-        st.session_state.selected_report_types = selected_report_types
+        st.session_state.selected_report_types = selected_report_type
 
         st.divider()
         with st.expander("Story Sources"):
