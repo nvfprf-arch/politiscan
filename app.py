@@ -705,23 +705,25 @@ if not st.session_state.get("logged_in"):
     _login_email = st.session_state.get("login_email", "")
 
     if _otp_sent:
-        _form_html = f"""
-        <div class="ps-otp-notice">🕐 &nbsp; Code dispatched to {_login_email} · expires in 10 min</div>
-        <div class="ps-col-rule"></div>
-        <label class="ps-label">6-digit code</label>
-        <input class="ps-inp" id="ps-code-inp" type="text" maxlength="6"
-               placeholder="······" autocomplete="one-time-code"
-               style="letter-spacing:6px;text-align:center;font-size:15px;" />
-        <button class="ps-btn-primary" onclick="psVerify()">Verify and sign in →</button>
-        <button class="ps-btn-secondary" onclick="psResend()">Resend code</button>
-        """
+        _form_html = (
+            '<div class="ps-otp-notice">&#128336; &nbsp; Code dispatched to '
+            + _login_email +
+            ' &middot; expires in 10 min</div>'
+            '<div class="ps-col-rule"></div>'
+            '<label class="ps-label">6-digit code</label>'
+            '<input class="ps-inp" id="ps-code-inp" type="text" maxlength="6"'
+            ' placeholder="&middot;&middot;&middot;&middot;&middot;&middot;" autocomplete="one-time-code"'
+            ' style="letter-spacing:6px;text-align:center;font-size:15px;" />'
+            '<button class="ps-btn-primary" onclick="psVerify()">Verify and sign in &#8594;</button>'
+            '<button class="ps-btn-secondary" onclick="psResend()">Resend code</button>'
+        )
     else:
-        _form_html = f"""
-        <label class="ps-label">Work email</label>
-        <input class="ps-inp" id="ps-email-inp" type="email"
-               placeholder="you@consultancy.com" autocomplete="email" />
-        <button class="ps-btn-primary" onclick="psSendOtp()">Send one-time code →</button>
-        """
+        _form_html = (
+            '<label class="ps-label">Work email</label>'
+            '<input class="ps-inp" id="ps-email-inp" type="email"'
+            ' placeholder="you@consultancy.com" autocomplete="email" />'
+            '<button class="ps-btn-primary" onclick="psSendOtp()">Send one-time code &#8594;</button>'
+        )
 
     st.markdown(f"""
     <style>
