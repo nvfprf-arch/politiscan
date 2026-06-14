@@ -105,10 +105,43 @@ with st.sidebar:
     else:
         ch_options = [f"All {language} Channels"] + list(YOUTUBE_CHANNELS[language].keys())
 
+    all_opt = ch_options[0]
+
+    # Initialize session state on first load
+    if "yt_channel_widget" not in st.session_state:
+        st.session_state["yt_channel_widget"] = [all_opt]
+        st.session_state["yt_prev_channels"] = [all_opt]
+        st.session_state["yt_prev_language"] = language
+
+    # Reset selection when language changes
+    if st.session_state.get("yt_prev_language") != language:
+        st.session_state["yt_channel_widget"] = [all_opt]
+        st.session_state["yt_prev_channels"] = [all_opt]
+        st.session_state["yt_prev_language"] = language
+
+    def _on_channel_change():
+        current = st.session_state["yt_channel_widget"]
+        prev = st.session_state["yt_prev_channels"]
+        newly_added = [x for x in current if x not in prev]
+
+        if not newly_added:
+            # Items were only removed; ensure selection is never empty
+            if not current:
+                st.session_state["yt_channel_widget"] = [all_opt]
+        elif all_opt in newly_added:
+            # 'All Channels' was added — clear specific channels
+            st.session_state["yt_channel_widget"] = [all_opt]
+        else:
+            # A specific channel was added — remove 'All Channels'
+            st.session_state["yt_channel_widget"] = [x for x in current if x != all_opt]
+
+        st.session_state["yt_prev_channels"] = list(st.session_state["yt_channel_widget"])
+
     selected_channels = st.multiselect(
         "News Channel",
         ch_options,
-        default=[ch_options[0]],
+        key="yt_channel_widget",
+        on_change=_on_channel_change,
     )
 
     time_period = st.selectbox(
