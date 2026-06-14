@@ -657,6 +657,19 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 /* All text dark */
 .block-container, .block-container * { color: #1a1a1a !important; }
 
+/* Kill Streamlit's default widget gaps */
+.block-container .stTextInput,
+.block-container .stButton,
+.block-container .element-container,
+.block-container [data-testid="element-container"],
+.block-container [data-testid="stVerticalBlock"] > div {
+    margin-bottom: 0.3rem !important;
+    padding-bottom: 0 !important;
+}
+.block-container [data-testid="stVerticalBlock"] {
+    gap: 0.3rem !important;
+}
+
 /* Newspaper elements */
 .np-rule-thick { height:3px; background:#1a1a1a; margin-bottom:2px; }
 .np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.15rem; }
