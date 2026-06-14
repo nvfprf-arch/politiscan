@@ -704,22 +704,13 @@ _TH = "padding:6px 10px;text-align:left;border-bottom:1px solid #444;white-space
 _TD = "padding:6px 10px;vertical-align:top;"
 
 
-def _render_article_table(rows: list, show_checkboxes: bool = False) -> None:
-    """Render a list of article row dicts as a styled HTML table.
-    When show_checkboxes=True, a leading checkbox column is added per row.
-    """
-    col_headers = ([""] if show_checkboxes else []) + list(_COL_ORDER)
-    header_html = "".join(f"<th style='{_TH}'>{c}</th>" for c in col_headers)
+def _render_article_table(rows: list, table_class: str = "") -> None:
+    """Render a list of article row dicts as a styled HTML table."""
+    cls = f" class='{table_class}'" if table_class else ""
+    header_html = "".join(f"<th style='{_TH}'>{c}</th>" for c in _COL_ORDER)
     body_html = ""
     for row in rows:
         cells = ""
-        if show_checkboxes:
-            link = (row.get("Link", "") or "").replace('"', "&quot;")
-            cells += (
-                f"<td style='{_TD};text-align:center;'>"
-                f"<input type='checkbox' class='article-check' value=\"{link}\">"
-                f"</td>"
-            )
         for col in _COL_ORDER:
             val = row.get(col, "") or ""
             if col == "Report Type":
@@ -737,7 +728,7 @@ def _render_article_table(rows: list, show_checkboxes: bool = False) -> None:
         body_html += f"<tr>{cells}</tr>"
     st.markdown(
         "<div style='overflow-x:auto;'>"
-        "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+        f"<table{cls} style='width:100%;border-collapse:collapse;font-size:13px;'>"
         f"<thead><tr style='background:#2a2a2a;'>{header_html}</tr></thead>"
         f"<tbody>{body_html}</tbody>"
         "</table></div>",
@@ -823,7 +814,6 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            # JS: use a MutationObserver so the sticky class survives Streamlit re-renders
             st.markdown("""
 <style>
 .ps-sticky-btn {
@@ -842,66 +832,103 @@ def _show_results():
     box-shadow: 0 4px 14px rgba(0,0,0,0.35) !important;
     border: none !important;
 }
-[data-testid="stDataEditor"] .ag-row {
-    min-height: 56px !important;
-}
-[data-testid="stDataEditor"] .ag-cell {
-    padding-top: 10px !important;
-    padding-bottom: 10px !important;
-    line-height: 1.6 !important;
-    white-space: normal !important;
-}
+/* Checkbox-only data editor: hide grid lines, match header height */
+.ps-chk-editor [data-testid="stDataEditor"] .ag-header { background: #2a2a2a !important; }
+.ps-chk-editor [data-testid="stDataEditor"] .ag-header-cell-label { color: white !important; justify-content: center !important; }
+.ps-chk-editor [data-testid="stDataEditor"] .ag-cell { display: flex !important; align-items: flex-start !important; justify-content: center !important; padding-top: 8px !important; }
+.ps-chk-editor [data-testid="stDataEditor"] .ag-row { border-bottom: 1px solid #444 !important; }
 </style>
 <script>
 (function() {
+    // --- Sticky button ---
     function tagBtn() {
         var btns = document.querySelectorAll('button');
         for (var i = 0; i < btns.length; i++) {
             if (btns[i].textContent.trim() === 'Add to Shortlist') {
                 var wrap = btns[i].closest('[data-testid="stButton"]');
-                if (wrap && !wrap.classList.contains('ps-sticky-btn')) {
+                if (wrap && !wrap.classList.contains('ps-sticky-btn'))
                     wrap.classList.add('ps-sticky-btn');
-                }
                 return;
             }
         }
     }
-    tagBtn();
-    new MutationObserver(tagBtn).observe(document.body, { childList: true, subtree: true });
+
+    // --- Row-height sync: match AG Grid rows to HTML table rows ---
+    var _busy = false;
+    function syncHeights() {
+        var tbl = document.querySelector('.ps-art-tbl');
+        var editor = document.querySelector('.ps-chk-editor [data-testid="stDataEditor"]');
+        if (!tbl || !editor) return;
+
+        // Sync header
+        var htmlHead = tbl.querySelector('thead tr');
+        var agHeader = editor.querySelector('.ag-header');
+        if (htmlHead && agHeader) {
+            var hh = htmlHead.offsetHeight;
+            agHeader.style.height = hh + 'px';
+            agHeader.style.minHeight = hh + 'px';
+            var agHeaderRow = editor.querySelector('.ag-header-row');
+            if (agHeaderRow) agHeaderRow.style.height = hh + 'px';
+        }
+
+        // Sync data rows
+        var htmlRows = Array.from(tbl.querySelectorAll('tbody tr'));
+        var agRows = Array.from(editor.querySelectorAll('.ag-row')).sort(function(a, b) {
+            return (parseInt(a.getAttribute('row-index')) || 0) - (parseInt(b.getAttribute('row-index')) || 0);
+        });
+        if (!htmlRows.length || !agRows.length || htmlRows.length !== agRows.length) return;
+
+        var top = 0;
+        for (var i = 0; i < htmlRows.length; i++) {
+            var h = htmlRows[i].offsetHeight;
+            if (h <= 0) return;
+            agRows[i].style.height    = h + 'px';
+            agRows[i].style.minHeight = h + 'px';
+            agRows[i].style.top       = top + 'px';
+            top += h;
+        }
+        ['ag-center-cols-container', 'ag-body-viewport', 'ag-body'].forEach(function(cls) {
+            var el = editor.querySelector('.' + cls);
+            if (el) el.style.minHeight = top + 'px';
+        });
+    }
+
+    function run() {
+        if (_busy) return;
+        _busy = true;
+        requestAnimationFrame(function() { tagBtn(); syncHeights(); _busy = false; });
+    }
+
+    run();
+    new MutationObserver(run).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 """, unsafe_allow_html=True)
 
-            def _display_val(col, row):
-                v = row.get(col, "") or ""
-                if col == "Summary" and v.startswith("What happened: "):
-                    v = v[len("What happened: "):]
-                return v
+            # Left: checkbox-only data editor  |  Right: full HTML article table
+            col_chk, col_tbl = st.columns([1, 18])
 
-            editor_rows = [
-                {"selected": False, **{c: _display_val(c, row) for c in _COL_ORDER}}
-                for row in non_shortlist
-            ]
-            edit_df = pd.DataFrame(editor_rows)[["selected"] + list(_COL_ORDER)]
-            edited = st.data_editor(
-                edit_df,
-                hide_index=True,
-                use_container_width=True,
-                column_config={
-                    "selected": st.column_config.CheckboxColumn("Add?", default=False),
-                    "Score":    st.column_config.NumberColumn("Score", format="%.1f"),
-                    "Headline": st.column_config.TextColumn("Headline", width="large"),
-                    "Summary":  st.column_config.TextColumn("Summary",  width="large"),
-                    "Link":     st.column_config.LinkColumn("Link", display_text="Read"),
-                },
-                key="all_articles_editor",
-            )
+            with col_chk:
+                st.markdown('<div class="ps-chk-editor">', unsafe_allow_html=True)
+                check_df = pd.DataFrame([{"Add?": False} for _ in non_shortlist])
+                edited_check = st.data_editor(
+                    check_df,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={"Add?": st.column_config.CheckboxColumn("Add?", default=False)},
+                    key="all_articles_editor",
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with col_tbl:
+                _render_article_table(non_shortlist, table_class="ps-art-tbl")
 
             if st.button("Add to Shortlist", key="add_shortlist_btn"):
-                selected_links = set(edited.loc[edited["selected"] == True, "Link"].tolist())
+                selected_indices = edited_check.loc[edited_check["Add?"] == True].index.tolist()
                 count = 0
-                for row in non_shortlist:
-                    if row.get("Link") in selected_links:
+                for idx in selected_indices:
+                    if idx < len(non_shortlist):
+                        row = non_shortlist[idx]
                         article = {
                             "url":          row.get("Link", ""),
                             "headline":     row.get("Headline", ""),
