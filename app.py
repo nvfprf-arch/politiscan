@@ -643,7 +643,7 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 /* Dark outer background */
 .stApp { background-color: #0a0a0a !important; }
 
-/* Centre column — this is what Streamlit actually renders widgets into */
+/* Cream card */
 .block-container {
     background: #f4efe3 !important;
     border: 1.5px solid #1a1a1a !important;
@@ -654,32 +654,32 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
     padding: 2rem 2.5rem 2rem !important;
 }
 
-/* All text inside block-container goes dark */
+/* All text dark */
 .block-container, .block-container * { color: #1a1a1a !important; }
 
-/* Newspaper typographic elements */
+/* Newspaper elements */
 .np-rule-thick { height:3px; background:#1a1a1a; margin-bottom:3px; }
-.np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.75rem; }
+.np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.3rem; }
 .np-masthead   { font-family:"Georgia","Times New Roman",serif; font-size:42px; font-weight:700;
-                 color:#1a1a1a; text-align:center; line-height:1; margin-bottom:0.5rem; }
-.np-meta       { display:flex; align-items:center; gap:6px; margin-bottom:0.5rem; }
+                 color:#1a1a1a; text-align:center; line-height:1; margin-bottom:0.4rem; }
+.np-meta       { display:flex; align-items:center; gap:6px; margin-bottom:0.3rem; }
 .np-meta-rule  { flex:1; height:0.5px; background:#b0a080; }
 .np-meta-text  { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; white-space:nowrap; }
-.np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0 0 0.4rem 0; }
+.np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0.2rem 0 0.4rem 0; }
 .np-subhead    { font-family:"Georgia","Times New Roman",serif; font-size:12.5px;
-                 font-style:italic; color:#4a3e28 !important; text-align:center; margin-top:0; margin-bottom:1rem; }
+                 font-style:italic; color:#4a3e28 !important; text-align:center; margin:0 0 1rem 0; }
 .np-label      { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important;
                  display:block; margin-bottom:4px; }
-.np-section-divider { border:none; border-top:1px solid #c8b898; margin:1.25rem 0; }
+.np-section-divider { border:none; border-top:1px solid #c8b898; margin:1rem 0; }
 .np-otp-note   { font-family:"Georgia","Times New Roman",serif; font-size:11.5px;
-                 font-style:italic; color:#7a6a4a !important; text-align:center; margin-bottom:1rem; }
+                 font-style:italic; color:#7a6a4a !important; text-align:center; margin-bottom:0.75rem; }
 .np-footer     { font-family:"Georgia","Times New Roman",serif; font-size:8px; letter-spacing:0.1em;
                  text-transform:uppercase; color:#b0a080 !important; text-align:center;
                  margin-top:1.5rem; padding-top:0.75rem; border-top:0.5px solid #c8b898; }
 
-/* Inputs — keep dark bg from Streamlit, just fix text to white */
+/* Inputs */
 .block-container .stTextInput input {
     color: #ffffff !important;
     font-family: "Georgia","Times New Roman",serif !important;
@@ -687,55 +687,32 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 }
 .block-container .stTextInput input::placeholder { color: #9a8a6a !important; font-style: italic; }
 
-/* Primary button — solid black fill */
-.block-container button[kind="primary"] {
+/* ALL buttons — solid black by default */
+.block-container button {
     background: #1a1a1a !important; color: #f4efe3 !important;
     border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;
     font-family: "Georgia","Times New Roman",serif !important;
     font-size: 10.5px !important; letter-spacing: 0.18em !important;
     text-transform: uppercase !important; width: 100% !important;
 }
-.block-container button[kind="primary"] p,
-.block-container button[kind="primary"] span { color: #f4efe3 !important; }
+.block-container button p,
+.block-container button span { color: #f4efe3 !important; }
 
-/* Secondary button — outline */
-.block-container button[kind="secondary"] {
-    background: transparent !important; color: #1a1a1a !important;
-    border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;
-    font-family: "Georgia","Times New Roman",serif !important;
-    font-size: 10.5px !important; letter-spacing: 0.18em !important;
-    text-transform: uppercase !important; width: 100% !important;
-}
-.block-container button[kind="secondary"] p,
-.block-container button[kind="secondary"] span { color: #1a1a1a !important; }
-
-/* Resend button specifically — no box, italic text */
-.block-container [data-testid="stButton"]:has(button[key="resend_btn"]) button,
-button[data-testid="baseButton-secondary"].resend-style {
-    background: transparent !important; border: none !important;
-    box-shadow: none !important; color: #7a6a4a !important;
-    font-style: italic !important; text-transform: none !important;
-    letter-spacing: 0.03em !important; font-size: 11px !important;
-    width: auto !important;
-}
-/* Fallback: style the resend via its container class */
+/* Resend — override to be borderless italic text */
 .np-resend-btn button {
     background: transparent !important; border: none !important;
     box-shadow: none !important; color: #7a6a4a !important;
-    font-family: "Georgia","Times New Roman",serif !important;
     font-style: italic !important; text-transform: none !important;
     letter-spacing: 0.03em !important; font-size: 11px !important;
-    width: auto !important; padding: 2px 0 !important;
+    width: auto !important; display: block !important; margin: 0 auto !important;
 }
 .np-resend-btn button p,
 .np-resend-btn button span { color: #7a6a4a !important; font-style: italic !important; }
 </style>
 """, unsafe_allow_html=True)
 
-    # Build the date string for the dateline
     today_str = datetime.now().strftime("%A, %-d %B %Y")
 
-    # Masthead block
     st.markdown(f'''
         <div class="np-rule-thick"></div>
         <div class="np-rule-thin"></div>
@@ -746,15 +723,17 @@ button[data-testid="baseButton-secondary"].resend-style {
             <div class="np-meta-rule"></div>
         </div>
         <hr class="np-divider">
-        <div class="np-subhead" style="margin-bottom:0.75rem;">Enter your email to receive today's intelligence dispatch</div>
+        <div class="np-subhead">Enter your email to receive today's intelligence dispatch</div>
     ''', unsafe_allow_html=True)
 
-    # Email label + field — always shown
+    # Email — always visible
     st.markdown('<div class="np-label">Email Address</div>', unsafe_allow_html=True)
-    if not st.session_state.get("otp_sent"):
+    otp_sent = st.session_state.get("otp_sent", False)
+
+    if not otp_sent:
         email = st.text_input("Email Address", key="login_email_input",
                               label_visibility="collapsed", placeholder="you@example.com")
-        if st.button("Send Verification Code", type="primary", key="send_otp_btn"):
+        if st.button("Send Verification Code", key="send_otp_btn"):
             if email not in ALLOWED_EMAILS:
                 st.error("Access denied. Contact your administrator.")
             else:
@@ -769,20 +748,21 @@ button[data-testid="baseButton-secondary"].resend-style {
                 else:
                     st.error(f"Failed to send OTP: {send_err}")
     else:
-        # Email stays visible but locked
+        # Email locked
         st.text_input("Email Address", value=st.session_state.login_email,
                       key="login_email_display", label_visibility="collapsed", disabled=True)
+        # Send button stays — disabled
+        st.button("Send Verification Code", key="send_otp_btn_disabled", disabled=True)
 
         st.markdown('<hr class="np-section-divider">', unsafe_allow_html=True)
         st.markdown(
             f'<div class="np-otp-note">Code sent to {st.session_state.login_email} — enter the 6 digits below</div>',
             unsafe_allow_html=True)
-
         st.markdown('<div class="np-label">Verification Code</div>', unsafe_allow_html=True)
         code = st.text_input("Verification Code", max_chars=6, key="otp_input",
                              label_visibility="collapsed", placeholder="······")
 
-        if st.button("Verify & Enter", type="secondary", key="verify_btn"):
+        if st.button("Verify & Enter", key="verify_btn"):
             if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
                 st.session_state.logged_in  = True
                 st.session_state.user_email = st.session_state.login_email
