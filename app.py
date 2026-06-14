@@ -814,121 +814,57 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            st.markdown("""
-<style>
-.ps-sticky-btn {
-    position: fixed !important;
-    bottom: 30px !important;
-    right: 30px !important;
-    z-index: 9999 !important;
-}
-.ps-sticky-btn button {
-    background-color: #FF4B4B !important;
-    color: white !important;
-    padding: 12px 28px !important;
-    border-radius: 8px !important;
-    font-size: 15px !important;
-    font-weight: 600 !important;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.35) !important;
-    border: none !important;
-}
-/* Checkbox-only data editor: hide grid lines, match header height */
-.ps-chk-editor [data-testid="stDataEditor"] .ag-header { background: #2a2a2a !important; }
-.ps-chk-editor [data-testid="stDataEditor"] .ag-header-cell-label { color: white !important; justify-content: center !important; }
-.ps-chk-editor [data-testid="stDataEditor"] .ag-cell { display: flex !important; align-items: flex-start !important; justify-content: center !important; padding-top: 8px !important; }
-.ps-chk-editor [data-testid="stDataEditor"] .ag-row { border-bottom: 1px solid #444 !important; }
-</style>
-<script>
-(function() {
-    // --- Sticky button ---
-    function tagBtn() {
-        var btns = document.querySelectorAll('button');
-        for (var i = 0; i < btns.length; i++) {
-            if (btns[i].textContent.trim() === 'Add to Shortlist') {
-                var wrap = btns[i].closest('[data-testid="stButton"]');
-                if (wrap && !wrap.classList.contains('ps-sticky-btn'))
-                    wrap.classList.add('ps-sticky-btn');
-                return;
-            }
-        }
-    }
-
-    // --- Row-height sync: match AG Grid rows to HTML table rows ---
-    var _busy = false;
-    function syncHeights() {
-        var tbl = document.querySelector('.ps-art-tbl');
-        var editor = document.querySelector('.ps-chk-editor [data-testid="stDataEditor"]');
-        if (!tbl || !editor) return;
-
-        // Sync header
-        var htmlHead = tbl.querySelector('thead tr');
-        var agHeader = editor.querySelector('.ag-header');
-        if (htmlHead && agHeader) {
-            var hh = htmlHead.offsetHeight;
-            agHeader.style.height = hh + 'px';
-            agHeader.style.minHeight = hh + 'px';
-            var agHeaderRow = editor.querySelector('.ag-header-row');
-            if (agHeaderRow) agHeaderRow.style.height = hh + 'px';
-        }
-
-        // Sync data rows
-        var htmlRows = Array.from(tbl.querySelectorAll('tbody tr'));
-        var agRows = Array.from(editor.querySelectorAll('.ag-row')).sort(function(a, b) {
-            return (parseInt(a.getAttribute('row-index')) || 0) - (parseInt(b.getAttribute('row-index')) || 0);
-        });
-        if (!htmlRows.length || !agRows.length || htmlRows.length !== agRows.length) return;
-
-        var top = 0;
-        for (var i = 0; i < htmlRows.length; i++) {
-            var h = htmlRows[i].offsetHeight;
-            if (h <= 0) return;
-            agRows[i].style.height    = h + 'px';
-            agRows[i].style.minHeight = h + 'px';
-            agRows[i].style.top       = top + 'px';
-            top += h;
-        }
-        ['ag-center-cols-container', 'ag-body-viewport', 'ag-body'].forEach(function(cls) {
-            var el = editor.querySelector('.' + cls);
-            if (el) el.style.minHeight = top + 'px';
-        });
-    }
-
-    function run() {
-        if (_busy) return;
-        _busy = true;
-        requestAnimationFrame(function() { tagBtn(); syncHeights(); _busy = false; });
-    }
-
-    run();
-    new MutationObserver(run).observe(document.body, { childList: true, subtree: true });
-})();
-</script>
-""", unsafe_allow_html=True)
-
-            # Left: checkbox-only data editor  |  Right: full HTML article table
-            col_chk, col_tbl = st.columns([1, 18])
-
-            with col_chk:
-                st.markdown('<div class="ps-chk-editor">', unsafe_allow_html=True)
-                check_df = pd.DataFrame([{"Add?": False} for _ in non_shortlist])
-                edited_check = st.data_editor(
-                    check_df,
-                    hide_index=True,
-                    use_container_width=True,
-                    column_config={"Add?": st.column_config.CheckboxColumn("Add?", default=False)},
-                    key="all_articles_editor",
+            # Header row: HTML column headers left, "Add" label right
+            col_hd, col_hb = st.columns([18, 1])
+            with col_hd:
+                header_cells = "".join(f"<th style='{_TH}'>{c}</th>" for c in _COL_ORDER)
+                st.markdown(
+                    f"<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+                    f"<thead><tr style='background:#2a2a2a;'>{header_cells}</tr></thead></table>",
+                    unsafe_allow_html=True,
                 )
-                st.markdown('</div>', unsafe_allow_html=True)
+            with col_hb:
+                st.markdown(
+                    f"<div style='{_TH}background:#2a2a2a;color:white;"
+                    f"text-align:center;'>Add</div>",
+                    unsafe_allow_html=True,
+                )
 
-            with col_tbl:
-                _render_article_table(non_shortlist, table_class="ps-art-tbl")
-
-            if st.button("Add to Shortlist", key="add_shortlist_btn"):
-                selected_indices = edited_check.loc[edited_check["Add?"] == True].index.tolist()
-                count = 0
-                for idx in selected_indices:
-                    if idx < len(non_shortlist):
-                        row = non_shortlist[idx]
+            # One row per article: HTML data cells left, + button right
+            for i, row in enumerate(non_shortlist):
+                col_d, col_b = st.columns([18, 1])
+                with col_d:
+                    cells = ""
+                    for col in _COL_ORDER:
+                        val = row.get(col, "") or ""
+                        if col == "Report Type":
+                            s = _BADGE_CSS.get(val, "")
+                            content = f'<span style="{s}">{val}</span>'
+                        elif col == "Link":
+                            content = (
+                                f'<a href="{val}" target="_blank" style="color:#4da6ff;">Read</a>'
+                                if val else ""
+                            )
+                        elif col == "Score":
+                            content = f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
+                        else:
+                            if col == "Summary" and val.startswith("What happened: "):
+                                val = val[len("What happened: "):]
+                            content = (
+                                str(val)
+                                .replace("&", "&amp;")
+                                .replace("<", "&lt;")
+                                .replace(">", "&gt;")
+                            )
+                        cells += f"<td style='{_TD}'>{content}</td>"
+                    st.markdown(
+                        f"<table style='width:100%;border-collapse:collapse;"
+                        f"font-size:13px;border-bottom:1px solid #444;'>"
+                        f"<tbody><tr>{cells}</tr></tbody></table>",
+                        unsafe_allow_html=True,
+                    )
+                with col_b:
+                    if st.button("＋", key=f"add_article_{i}"):
                         article = {
                             "url":          row.get("Link", ""),
                             "headline":     row.get("Headline", ""),
@@ -940,10 +876,8 @@ def _show_results():
                         record_promotion(st.session_state.user_email, article)
                         if row not in st.session_state.shortlist_articles:
                             st.session_state.shortlist_articles.append(row)
-                        count += 1
-                if count > 0:
-                    st.success(f"{count} article{'s' if count != 1 else ''} added to your shortlist.")
-                    st.rerun()
+                        st.toast(f"Added to shortlist: {row.get('Headline', '')[:80]}")
+                        st.rerun()
         else:
             st.caption("All scanned articles are already in your shortlist.")
 

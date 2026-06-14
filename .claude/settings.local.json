@@ -16,7 +16,8 @@
       "WebFetch(domain:socialblade.com)",
       "WebFetch(domain:www.noxinfluencer.com)",
       "WebFetch(domain:www.tunepocket.com)",
-      "WebFetch(domain:hypeauditor.com)"
+      "WebFetch(domain:hypeauditor.com)",
+      "Bash(git revert:*)"
     ]
   }
 }
