@@ -773,36 +773,57 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            editor_rows = [{**{c: r.get(c, "") for c in _COL_ORDER}, "selected": False}
-                           for r in non_shortlist]
-            edit_df = pd.DataFrame(editor_rows)[["selected"] + _COL_ORDER]
-            edit_df_styled = edit_df.style.apply(_style_report_type, subset=["Report Type"])
-
-            edited = st.data_editor(
-                edit_df_styled,
-                hide_index=True,
-                use_container_width=True,
-                column_config={
-                    "selected": st.column_config.CheckboxColumn("Add?", default=False),
-                    "Score":    st.column_config.NumberColumn("Score", format="%.1f"),
-                    "Headline": st.column_config.TextColumn("Headline", width="medium"),
-                    "Summary":  st.column_config.TextColumn("Summary",  width="medium"),
-                    "Link":     st.column_config.LinkColumn("Link", display_text="Read"),
-                },
+            _BADGE_CSS = {
+                "CONFIRMED":   "background:#1a472a;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
+                "SPECULATIVE": "background:#7d4e00;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
+                "ANALYTICAL":  "background:#1a3a5c;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
+            }
+            th_style = "padding:6px 10px;text-align:left;border-bottom:1px solid #444;white-space:nowrap;"
+            td_style = "padding:6px 10px;vertical-align:top;"
+            header_html = "".join(f"<th style='{th_style}'>{c}</th>" for c in _COL_ORDER)
+            body_html = ""
+            for row in non_shortlist:
+                cells = ""
+                for col in _COL_ORDER:
+                    val = row.get(col, "") or ""
+                    if col == "Report Type":
+                        s = _BADGE_CSS.get(val, "")
+                        content = f'<span style="{s}">{val}</span>'
+                    elif col == "Link":
+                        content = f'<a href="{val}" target="_blank" style="color:#4da6ff;">Read</a>' if val else ""
+                    elif col == "Score":
+                        content = f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
+                    else:
+                        content = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    cells += f"<td style='{td_style}'>{content}</td>"
+                body_html += f"<tr>{cells}</tr>"
+            table_html = (
+                "<div style='overflow-x:auto;'>"
+                "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+                f"<thead><tr style='background:#2a2a2a;'>{header_html}</tr></thead>"
+                f"<tbody>{body_html}</tbody>"
+                "</table></div>"
             )
+            st.markdown(table_html, unsafe_allow_html=True)
 
+            available_headlines = [r.get("Headline", "") for r in non_shortlist if r.get("Headline")]
+            selected_headlines = st.multiselect(
+                "Select articles to add to shortlist",
+                options=available_headlines,
+                placeholder="Select articles to promote...",
+            )
             if st.button("Add to Shortlist"):
-                selected_links = set(edited.loc[edited["selected"] == True, "Link"].tolist())
+                selected_set = set(selected_headlines)
                 count = 0
                 for row in non_shortlist:
-                    if row.get("Link") in selected_links:
+                    if row.get("Headline") in selected_set:
                         article = {
                             "url":                   row.get("Link", ""),
                             "headline":              row.get("Headline", ""),
                             "primary_tag":           row.get("Tag", ""),
                             "final_score":           row.get("Score", 0),
                             "source_name":           row.get("Sources", ""),
-                            "affects_client_region": row.get("Region", "-") == "\u2713",
+                            "affects_client_region": False,
                         }
                         record_promotion(st.session_state.user_email, article)
                         if row not in st.session_state.shortlist_articles:
