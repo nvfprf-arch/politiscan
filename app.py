@@ -634,38 +634,237 @@ if DEV_MODE:
     st.session_state.user_email = "dev@test.com"
 
 if not st.session_state.get("logged_in"):
-    st.title("PolitiScan")
-    st.subheader("Political Intelligence Dashboard")
+    # Hide all Streamlit chrome on login page
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap');
+    [data-testid='stSidebarNav'] {display: none;}
+    [data-testid='stSidebar'] {display: none;}
+    header {display: none;}
+    #MainMenu {display: none;}
+    footer {display: none;}
 
-    if not st.session_state.get("otp_sent"):
-        email = st.text_input("Email address", key="login_email_input")
-        if st.button("Send OTP", type="primary"):
-            if email not in ALLOWED_EMAILS:
-                st.error("Access denied. Contact your administrator.")
-            else:
+    /* Full page black background */
+    .stApp { background: #060607 !important; }
+    html, body { background: #060607 !important; }
+
+    /* Remove all default block padding so we control spacing */
+    .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+
+    /* Style the center column to look like a card */
+    [data-testid="stHorizontalBlock"] > div:nth-child(2) {
+        background: #0e0e12 !important;
+        border: 0.5px solid #28282e !important;
+        border-radius: 14px !important;
+        padding: 1.75rem !important;
+        margin-top: 8vh !important;
+    }
+
+    /* Input fields */
+    [data-testid="stTextInput"] input {
+        background: #080809 !important;
+        border: 0.5px solid #1e1e26 !important;
+        border-radius: 6px !important;
+        color: #909098 !important;
+        font-size: 13px !important;
+    }
+
+    /* Primary button */
+    [data-testid="stButton"] > button[kind="primary"] {
+        background: #18181e !important;
+        border: 0.5px solid #2e2e38 !important;
+        border-radius: 6px !important;
+        color: #a0a0b0 !important;
+        font-size: 13px !important;
+        width: 100% !important;
+    }
+    [data-testid="stButton"] > button[kind="primary"]:hover {
+        background: #202028 !important;
+        border-color: #3a3a46 !important;
+    }
+
+    /* Secondary button */
+    [data-testid="stButton"] > button[kind="secondary"] {
+        background: transparent !important;
+        border: 0.5px solid #1e1e26 !important;
+        border-radius: 6px !important;
+        color: #404050 !important;
+        font-size: 12px !important;
+    }
+
+    /* Divider inside card */
+    .ps-divider { height: 0.5px; background: #1e1e24; margin: 0.75rem 0 1rem; }
+
+    /* Brand block */
+    .ps-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 1.25rem; }
+    .ps-brand-icon {
+        width: 30px; height: 30px; background: #141418;
+        border: 0.5px solid #2a2a30; border-radius: 7px;
+        display: flex; align-items: center; justify-content: center; font-size: 15px;
+        flex-shrink: 0;
+    }
+    .ps-brand-name { font-size: 14px; font-weight: 500; color: #c8cdd8; display: block; }
+    .ps-brand-sub { font-size: 9px; color: #38383f; letter-spacing: 0.8px; text-transform: uppercase; display: block; }
+
+    /* Heading */
+    .ps-heading { font-size: 18px; font-weight: 500; color: #b8c0d0; margin-bottom: 0.15rem; }
+    .ps-subheading { font-size: 11px; color: #38383f; margin-bottom: 1rem; }
+
+    /* Label above inputs */
+    .ps-label { font-size: 11px; color: #505058; margin-bottom: 3px; display: block; }
+
+    /* OTP notice */
+    .ps-notice {
+        display: flex; align-items: flex-start; gap: 7px;
+        padding: 8px 10px; background: #0c0c10;
+        border: 0.5px solid #1e1e28; border-radius: 6px;
+        margin-bottom: 0.75rem; font-size: 11px; color: #505058; line-height: 1.4;
+    }
+
+    /* Card footer */
+    .ps-card-footer {
+        margin-top: 1rem; padding-top: 0.75rem;
+        border-top: 0.5px solid #161620;
+        display: flex; justify-content: space-between;
+        font-size: 10px; color: #242430;
+    }
+
+    /* Newspaper background */
+    .ps-bg {
+        position: fixed; inset: 0; overflow: hidden;
+        opacity: 0.15; z-index: -1; padding: 8px;
+        pointer-events: none;
+    }
+    .ps-bg-inner {
+        display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0;
+        animation: psBgScroll 65s linear infinite;
+    }
+    @keyframes psBgScroll { from{transform:translateY(0)} to{transform:translateY(-50%)} }
+    .ps-bg-col { padding: 0 10px; border-right: 0.5px solid #ffffff15; }
+    .ps-bg-col:last-child { border-right: none; }
+    .ps-bg-story { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 0.5px solid #ffffff08; }
+    .ps-bg-tag { font-size: 7px; letter-spacing: 1.2px; text-transform: uppercase; color: #fff; font-weight: 500; margin-bottom: 3px; }
+    .ps-bg-hed { font-size: 11px; color: #fff; line-height: 1.35; margin-bottom: 3px; font-family: 'IM Fell English', Georgia, serif; }
+    .ps-bg-byline { font-size: 8px; color: #aaa; margin-bottom: 3px; font-style: italic; font-family: 'IM Fell English', Georgia, serif; }
+    .ps-bg-body { font-size: 9px; color: #888; line-height: 1.6; }
+    </style>
+
+    <!-- Scrolling newspaper background (fixed, behind everything) -->
+    <div class="ps-bg"><div id="ps-bg-inner" class="ps-bg-inner"></div></div>
+
+    <script>
+    const PS_STORIES = [
+      {tag:"ELECTION",hed:"Election Commission issues formal notice for five state assembly by-elections; polling dates announced",byline:"Bureau Chief · New Delhi",body:"Opposition parties have raised concerns over timing, demanding the model code of conduct be enforced immediately across all affected constituencies."},
+      {tag:"CABINET",hed:"PM holds unscheduled security council meeting; Defence Minister summoned from overseas visit",byline:"North Block Correspondent · New Delhi",body:"An emergency session of the Cabinet Committee on Security was convened. Three service chiefs and the NSA were present. No official readout was issued."},
+      {tag:"ALLIANCE",hed:"INDIA bloc seat-sharing deadlock enters third week; Bihar and UP remain unresolved",byline:"Political Bureau · Kolkata",body:"Senior leaders from seven opposition parties failed to reach consensus on seat allocation in Bihar, UP, and Maharashtra ahead of the general election schedule."},
+      {tag:"PROTEST",hed:"Wrestlers threaten indefinite dharna outside Parliament if WFI chief not removed by Friday",byline:"Sports Desk · New Delhi",body:"Four Olympic-medal-winning athletes announced they will camp outside Parliament from Monday unless the government acts on pending harassment complaints."},
+      {tag:"GOVERNANCE",hed:"Supreme Court stays Madhya Pradesh OBC reservation hike pending fresh census data review",byline:"Legal Correspondent · New Delhi",body:"A bench of three judges issued an interim stay on the notification raising OBC reservation to 35 percent, seeking fresh affidavits within four weeks."},
+      {tag:"SCANDAL",hed:"CBI names sitting MLA in disproportionate assets case; arrest expected within 48 hours",byline:"Investigative Bureau · Bhopal",body:"The CBI filed a supplementary chargesheet naming a sitting MLA in a case involving assets worth Rs 180 crore beyond known income sources."},
+      {tag:"ELECTION",hed:"Andhra CM announces freebies worth Rs 8,000 crore days before model code of conduct kicks in",byline:"State Correspondent · Amaravati",body:"The ruling party unveiled a package covering free gas cylinders, cash transfers, and subsidised rice. Opposition has complained to the Election Commission."},
+      {tag:"PARTY",hed:"Nitish Kumar skips NDA coordination meeting for second consecutive week; speculation mounts",byline:"Political Correspondent · Patna",body:"The Bihar CM's continued absence from alliance meetings has triggered fresh speculation about JD(U)'s long-term commitment to the NDA."},
+      {tag:"POLICY",hed:"Centre notifies rules capping political ad spend on digital platforms at Rs 1 crore per week",byline:"Policy Reporter · New Delhi",body:"The Ministry of Electronics issued the gazette notification. Social media platforms given 30 days to implement the spending-cap enforcement mechanisms."},
+      {tag:"ALLIANCE",hed:"Shiv Sena factions file competing petitions over party symbol ahead of Maharashtra polls",byline:"Legal Bureau · Mumbai",body:"Both the Shinde and Thackeray camps have approached the Election Commission with fresh evidence in the ongoing bow-and-arrow symbol dispute."},
+      {tag:"CABINET",hed:"Kerala CM reshuffles three departments; senior IAS officer moved out of home ministry",byline:"State Bureau · Thiruvananthapuram",body:"The reshuffle is seen as an attempt to address party worker complaints about administrative functioning ahead of local body elections."},
+      {tag:"ELECTION",hed:"JMM releases first candidate list; women nominees raised to 30 percent of total contested seats",byline:"Eastern Bureau · Ranchi",body:"Jharkhand Mukti Morcha's first list signals a significant shift in voter outreach with a substantially higher proportion of women than the previous cycle."},
+    ];
+    function psBuildBg() {
+      const doubled = [...PS_STORIES, ...PS_STORIES];
+      const third = Math.ceil(doubled.length / 3);
+      let html = '';
+      for (let c = 0; c < 3; c++) {
+        const slice = doubled.slice(c * third, (c+1) * third);
+        html += '<div class="ps-bg-col">' + slice.map(s =>
+          `<div class="ps-bg-story"><div class="ps-bg-tag">${s.tag}</div><div class="ps-bg-hed">${s.hed}</div><div class="ps-bg-byline">${s.byline}</div><div class="ps-bg-body">${s.body}</div></div>`
+        ).join('') + '</div>';
+      }
+      const el = document.getElementById('ps-bg-inner');
+      if (el) { el.innerHTML = html; }
+    }
+    document.addEventListener('DOMContentLoaded', psBuildBg);
+    setTimeout(psBuildBg, 500);
+    </script>
+
+
+    """, unsafe_allow_html=True)
+
+    # Three columns: spacer | card | spacer
+    _, card_col, _ = st.columns([1.5, 1, 1.5])
+
+    with card_col:
+        # Brand header
+        st.markdown("""
+        <div class="ps-brand">
+          <div class="ps-brand-icon">🗳️</div>
+          <div>
+            <span class="ps-brand-name">PolitiScan</span>
+            <span class="ps-brand-sub">Political Intelligence</span>
+          </div>
+        </div>
+        <div class="ps-divider"></div>
+        <div class="ps-heading">Welcome back</div>
+        <div class="ps-subheading">Sign in to access your intelligence dashboard</div>
+        """, unsafe_allow_html=True)
+
+        if not st.session_state.get("otp_sent"):
+            st.markdown('<span class="ps-label">Work email</span>', unsafe_allow_html=True)
+            email = st.text_input(
+                "Work email", key="login_email_input",
+                label_visibility="collapsed",
+                placeholder="you@consultancy.com",
+            )
+            if st.button("Send one-time code →", type="primary", use_container_width=True):
+                if email not in ALLOWED_EMAILS:
+                    st.error("Access denied. Contact your administrator.")
+                else:
+                    otp = generate_otp()
+                    st.session_state.otp           = otp
+                    st.session_state.otp_timestamp = datetime.now()
+                    st.session_state.login_email   = email
+                    sent, send_err = send_otp_email(email, otp)
+                    if sent:
+                        st.session_state.otp_sent = True
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to send OTP: {send_err}")
+        else:
+            st.markdown(
+                f'<div class="ps-notice">🕐 &nbsp; Code sent to {st.session_state.login_email} · expires in 10 min</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown('<span class="ps-label">6-digit code</span>', unsafe_allow_html=True)
+            code = st.text_input(
+                "6-digit code", max_chars=6, key="otp_input",
+                label_visibility="collapsed",
+                placeholder="······",
+            )
+            if st.button("Verify and sign in →", type="primary", use_container_width=True):
+                if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
+                    st.session_state.logged_in  = True
+                    st.session_state.user_email = st.session_state.login_email
+                    for k in ("otp", "otp_timestamp", "otp_sent", "login_email"):
+                        st.session_state.pop(k, None)
+                    st.rerun()
+                else:
+                    st.error("Invalid or expired code. Please try again.")
+            if st.button("Resend code", use_container_width=True):
                 otp = generate_otp()
                 st.session_state.otp           = otp
                 st.session_state.otp_timestamp = datetime.now()
-                st.session_state.login_email   = email
-                sent, send_err = send_otp_email(email, otp)
+                sent, send_err = send_otp_email(st.session_state.login_email, otp)
                 if sent:
-                    st.session_state.otp_sent = True
-                    st.rerun()
+                    st.success("New code sent.")
                 else:
-                    st.error(f"Failed to send OTP: {send_err}")
-    else:
-        st.success(f"OTP sent to {st.session_state.login_email}. Enter the 6-digit code below.")
-        code = st.text_input("6-digit code", max_chars=6, key="otp_input")
-        if st.button("Verify", type="primary"):
-            if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
-                st.session_state.logged_in  = True
-                st.session_state.user_email = st.session_state.login_email
-                # Clear login state
-                for k in ("otp", "otp_timestamp", "otp_sent", "login_email"):
-                    st.session_state.pop(k, None)
-                st.rerun()
-            else:
-                st.error("Invalid or expired code. Please try again.")
+                    st.error(f"Failed to resend: {send_err}")
+
+        st.markdown("""
+        <div class="ps-card-footer">
+          <span>🔒 Secure · Authorised users only</span>
+          <span>v4.0</span>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.stop()
 
