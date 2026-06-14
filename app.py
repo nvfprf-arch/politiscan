@@ -667,8 +667,11 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 .np-meta-text  { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; white-space:nowrap; }
 .np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0.2rem 0 0.4rem 0; }
-.np-subhead    { font-family:"Georgia","Times New Roman",serif; font-size:12.5px;
-                 font-style:italic; color:#4a3e28 !important; text-align:center; margin:0 0 1rem 0; }
+.np-tagline    { font-family:"Georgia","Times New Roman",serif; font-size:15px;
+                 font-weight:700; color:#1a1a1a !important; text-align:center;
+                 margin:0.6rem 0 0.4rem 0; line-height:1.45; }
+.np-subhead    { font-family:"Georgia","Times New Roman",serif; font-size:11px;
+                 font-style:italic; color:#7a6a4a !important; text-align:center; margin:0 0 1rem 0; }
 .np-label      { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important;
                  display:block; margin-bottom:4px; }
@@ -723,6 +726,7 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
             <div class="np-meta-rule"></div>
         </div>
         <hr class="np-divider">
+        <div class="np-tagline">Your daily briefing on what matters in Indian politics — curated, ranked, and ready.</div>
         <div class="np-subhead">Enter your email to receive today's intelligence dispatch</div>
     ''', unsafe_allow_html=True)
 
@@ -754,9 +758,9 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
         # Send button stays — disabled
         st.button("Send Verification Code", key="send_otp_btn_disabled", disabled=True)
 
-        st.markdown('<hr class="np-section-divider">', unsafe_allow_html=True)
         st.markdown(
-            f'<div class="np-otp-note">Code sent to {st.session_state.login_email} — enter the 6 digits below</div>',
+            f'<div class="np-otp-note">Code sent to {st.session_state.login_email} — enter the 6 digits below. Expires in 10 minutes.</div>'
+            '<hr class="np-section-divider">',
             unsafe_allow_html=True)
         st.markdown('<div class="np-label">Verification Code</div>', unsafe_allow_html=True)
         code = st.text_input("Verification Code", max_chars=6, key="otp_input",
