@@ -634,39 +634,254 @@ if DEV_MODE:
     st.session_state.user_email = "dev@test.com"
 
 if not st.session_state.get("logged_in"):
-    st.markdown("<style>[data-testid='stSidebarNav'] {display: none;}</style>", unsafe_allow_html=True)
-    st.title("PolitiScan")
-    st.subheader("Political Intelligence Dashboard")
+    # Hide all Streamlit chrome on login page
+    st.markdown("""
+    <style>
+    [data-testid='stSidebarNav'] {display: none;}
+    [data-testid='stSidebar'] {display: none;}
+    header {display: none;}
+    #MainMenu {display: none;}
+    footer {display: none;}
+    .block-container {padding: 0 !important; max-width: 100% !important;}
+    @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap');
 
-    if not st.session_state.get("otp_sent"):
-        email = st.text_input("Email address", key="login_email_input")
-        if st.button("Send OTP", type="primary"):
-            if email not in ALLOWED_EMAILS:
-                st.error("Access denied. Contact your administrator.")
-            else:
+    /* ── Layout ── */
+    .ps-wrapper {display: flex; min-height: 100vh; background: #080809;}
+
+    /* ── Left panel ── */
+    .ps-left {
+        width: 100%; padding: 2rem 1.75rem 1.5rem;
+        background: #0a0a0c;
+        display: flex; flex-direction: column; min-height: 100vh;
+    }
+    .ps-brand {display: flex; align-items: center; gap: 10px; margin-bottom: 2rem;}
+    .ps-brand-icon {
+        width: 34px; height: 34px; background: #141418;
+        border: 0.5px solid #2a2a30; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center; font-size: 17px;
+    }
+    .ps-brand-name {font-size: 15px; font-weight: 500; color: #c8cdd8; display: block;}
+    .ps-brand-sub {font-size: 10px; color: #38383f; letter-spacing: 0.8px; text-transform: uppercase; display: block;}
+    .ps-heading {font-size: 20px; font-weight: 500; color: #b0b8c8; margin-bottom: 0.2rem;}
+    .ps-subheading {font-size: 12px; color: #38383f; margin-bottom: 1.5rem;}
+    .ps-label {font-size: 11px; color: #505058; margin-bottom: 5px; display: block;}
+    .ps-notice {
+        display: flex; align-items: center; gap: 7px;
+        padding: 8px 11px; background: #101012;
+        border: 0.5px solid #1e1e24; border-radius: 6px;
+        margin-bottom: 1rem; font-size: 11px; color: #505058;
+    }
+    .ps-footer {
+        margin-top: auto; padding-top: 1rem;
+        border-top: 0.5px solid #141418;
+        display: flex; justify-content: space-between;
+        font-size: 10px; color: #282830;
+    }
+
+    /* ── Right panel: broadsheet ── */
+    .ps-right {
+        flex: 1; background: #050506; overflow: hidden;
+        position: relative; min-height: 100vh;
+    }
+    .ps-masthead {
+        padding: 11px 16px 0; background: #050506;
+        border-bottom: 3px double #282830;
+    }
+    .ps-masthead-top {
+        display: flex; justify-content: space-between;
+        align-items: flex-end; margin-bottom: 4px;
+    }
+    .ps-masthead-meta {font-size: 8px; color: #303038; letter-spacing: 0.5px;}
+    .ps-masthead-title {
+        font-size: 20px; font-weight: 400; color: #909098;
+        letter-spacing: 3px; text-align: center; flex: 1;
+        font-family: 'IM Fell English', Georgia, serif;
+    }
+    .ps-masthead-rule {border: none; border-top: 0.5px solid #282830; margin: 4px 0 0;}
+    .ps-masthead-tagline {
+        font-size: 8px; color: #282830; text-align: center;
+        letter-spacing: 1.5px; text-transform: uppercase;
+        padding: 3px 0 7px; border-bottom: 1px solid #202028;
+    }
+    .ps-scroll-outer {height: calc(100vh - 74px); overflow: hidden; position: relative;}
+    .ps-scroll-inner {animation: psScrollUp 70s linear infinite;}
+    @keyframes psScrollUp {from{transform:translateY(0)}to{transform:translateY(-50%)}}
+    .ps-broadsheet {padding: 10px 6px 0;}
+    .ps-banner {padding: 0 10px 10px; border-bottom: 1px solid #202028; margin-bottom: 10px;}
+    .ps-banner-tag {font-size: 7px; letter-spacing: 1.5px; text-transform: uppercase; color: #484850; font-weight: 500; margin-bottom: 3px;}
+    .ps-banner-hed {font-size: 14px; font-weight: 400; color: #787880; font-family: 'IM Fell English', Georgia, serif; line-height: 1.3; margin-bottom: 4px;}
+    .ps-banner-deck {font-size: 10px; color: #404048; line-height: 1.5; font-style: italic; font-family: 'IM Fell English', Georgia, serif;}
+    .ps-columns {display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0;}
+    .ps-col {padding: 0 9px; border-right: 0.5px solid #1a1a20;}
+    .ps-col:last-child {border-right: none;}
+    .ps-story {margin-bottom: 12px; padding-bottom: 10px; border-bottom: 0.5px solid #141418;}
+    .ps-story:last-child {border-bottom: none; margin-bottom: 0;}
+    .ps-story-tag {font-size: 7px; letter-spacing: 1.2px; text-transform: uppercase; font-weight: 500; color: #505058; margin-bottom: 2px; padding-bottom: 2px; border-bottom: 0.5px solid #1e1e24;}
+    .ps-story-hed {font-size: 10.5px; font-weight: 400; color: #707078; line-height: 1.35; margin-bottom: 3px; font-family: 'IM Fell English', Georgia, serif;}
+    .ps-story-byline {font-size: 8px; color: #2e2e36; margin-bottom: 3px; letter-spacing: 0.3px; font-style: italic; font-family: 'IM Fell English', Georgia, serif;}
+    .ps-story-body {font-size: 9px; color: #3a3a42; line-height: 1.65;}
+    .ps-fade-top {position: absolute; top: 0; left: 0; right: 0; height: 30px; background: linear-gradient(#050506, transparent); pointer-events: none; z-index: 2;}
+    .ps-fade-bot {position: absolute; bottom: 0; left: 0; right: 0; height: 90px; background: linear-gradient(transparent, #050506); pointer-events: none; z-index: 2;}
+    .ps-lock-hint {position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 9px; color: #282830; z-index: 3; letter-spacing: 0.5px;}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Build today's date for the masthead
+    _today = datetime.now().strftime("%a, %d %B %Y").upper()
+
+    # Newspaper right panel HTML (static — zero API cost)
+    _newspaper_html = f"""
+    <div class="ps-right">
+      <div class="ps-masthead">
+        <div class="ps-masthead-top">
+          <div class="ps-masthead-meta">INDIA POLITICAL DESK</div>
+          <div class="ps-masthead-title">THE DAILY BRIEF</div>
+          <div class="ps-masthead-meta">{_today}</div>
+        </div>
+        <hr class="ps-masthead-rule"/>
+        <div class="ps-masthead-tagline">Live Feed &nbsp;·&nbsp; Political Intelligence &nbsp;·&nbsp; Authorised Access Only</div>
+      </div>
+      <div class="ps-scroll-outer">
+        <div class="ps-fade-top"></div>
+        <div class="ps-scroll-inner">
+          <div class="ps-broadsheet">
+            <div class="ps-banner">
+              <div class="ps-banner-tag">BREAKING · ELECTION</div>
+              <div class="ps-banner-hed">Election Commission issues formal notice for five state assembly by-elections; polling dates announced across four states</div>
+              <div class="ps-banner-deck">Opposition parties have raised concerns over timing, demanding the model code of conduct be enforced immediately across all affected constituencies.</div>
+            </div>
+            <div class="ps-columns">
+              <div class="ps-col">
+                <div class="ps-story"><div class="ps-story-tag">CABINET</div><div class="ps-story-hed">PM holds unscheduled security council meeting; Defence Minister summoned from overseas visit</div><div class="ps-story-byline">North Block Correspondent · New Delhi</div><div class="ps-story-body">An emergency session of the Cabinet Committee on Security was convened late Thursday. Three service chiefs and the NSA were present. No official readout was issued.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">ALLIANCE</div><div class="ps-story-hed">INDIA bloc seat-sharing deadlock enters third week; Bihar and UP remain unresolved</div><div class="ps-story-byline">Political Bureau · Kolkata</div><div class="ps-story-body">Senior leaders from seven opposition parties failed to reach consensus on seat allocation in Bihar, UP, and Maharashtra ahead of the general election schedule.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">PROTEST</div><div class="ps-story-hed">Wrestlers threaten indefinite dharna outside Parliament if WFI chief not removed by Friday</div><div class="ps-story-byline">Sports Desk · New Delhi</div><div class="ps-story-body">Four Olympic-medal-winning athletes announced they will camp outside Parliament from Monday unless the government acts on pending harassment complaints against the federation.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">GOVERNANCE</div><div class="ps-story-hed">Supreme Court stays Madhya Pradesh OBC reservation hike pending fresh census data review</div><div class="ps-story-byline">Legal Correspondent · New Delhi</div><div class="ps-story-body">A bench of three judges issued an interim stay on the state government's notification raising OBC reservation to 35 percent, seeking fresh affidavits within four weeks.</div></div>
+              </div>
+              <div class="ps-col">
+                <div class="ps-story"><div class="ps-story-tag">SCANDAL</div><div class="ps-story-hed">CBI names sitting MLA in disproportionate assets case; arrest expected within 48 hours</div><div class="ps-story-byline">Investigative Bureau · Bhopal</div><div class="ps-story-body">The CBI filed a supplementary chargesheet naming a sitting MLA from the ruling party in a case involving assets worth Rs 180 crore beyond known income sources.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">ELECTION</div><div class="ps-story-hed">Andhra CM announces freebies worth Rs 8,000 crore days before model code of conduct kicks in</div><div class="ps-story-byline">State Correspondent · Amaravati</div><div class="ps-story-body">The ruling party unveiled a package covering free gas cylinders, cash transfers, and subsidised rice. Opposition has complained to the Election Commission alleging MCC violations.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">PARTY</div><div class="ps-story-hed">Nitish Kumar skips NDA coordination meeting for second consecutive week; speculation mounts</div><div class="ps-story-byline">Political Correspondent · Patna</div><div class="ps-story-body">The Bihar CM's continued absence from alliance meetings has triggered fresh speculation about JD(U)'s long-term commitment to the NDA, with insiders offering conflicting accounts.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">POLICY</div><div class="ps-story-hed">Centre notifies rules capping political ad spend on digital platforms at Rs 1 crore per week</div><div class="ps-story-byline">Policy Reporter · New Delhi</div><div class="ps-story-body">The Ministry of Electronics issued the gazette notification Thursday. Social media platforms have been given 30 days to implement the spending-cap enforcement mechanisms.</div></div>
+              </div>
+              <div class="ps-col">
+                <div class="ps-story"><div class="ps-story-tag">ALLIANCE</div><div class="ps-story-hed">Shiv Sena factions file competing petitions over party symbol ahead of Maharashtra polls</div><div class="ps-story-byline">Legal Bureau · Mumbai</div><div class="ps-story-body">Both the Shinde and Thackeray camps have approached the Election Commission with fresh evidence in the ongoing bow-and-arrow symbol dispute.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">GOVERNANCE</div><div class="ps-story-hed">Rajasthan tables anti-corruption bill; opposition demands joint parliamentary committee review</div><div class="ps-story-byline">Legislative Correspondent · Jaipur</div><div class="ps-story-body">The bill proposes fast-track courts for corruption cases involving officials at joint secretary rank and above. Treasury benches passed it on a voice vote after a three-hour debate.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">CABINET</div><div class="ps-story-hed">Kerala CM reshuffles three departments; senior IAS officer moved out of home ministry</div><div class="ps-story-byline">State Bureau · Thiruvananthapuram</div><div class="ps-story-body">The reshuffle is seen as an attempt to address party worker complaints about administrative functioning ahead of local body elections scheduled for next quarter.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">ELECTION</div><div class="ps-story-hed">JMM releases first candidate list; women nominees raised to 30 percent of total contested seats</div><div class="ps-story-byline">Eastern Bureau · Ranchi</div><div class="ps-story-body">Jharkhand Mukti Morcha's first list signals a significant shift in voter outreach strategy with a substantially higher proportion of women than the previous election cycle.</div></div>
+              </div>
+            </div>
+          </div>
+          <!-- Duplicate block for seamless infinite scroll -->
+          <div class="ps-broadsheet">
+            <div class="ps-banner">
+              <div class="ps-banner-tag">BREAKING · ELECTION</div>
+              <div class="ps-banner-hed">Election Commission issues formal notice for five state assembly by-elections; polling dates announced across four states</div>
+              <div class="ps-banner-deck">Opposition parties have raised concerns over timing, demanding the model code of conduct be enforced immediately across all affected constituencies.</div>
+            </div>
+            <div class="ps-columns">
+              <div class="ps-col">
+                <div class="ps-story"><div class="ps-story-tag">CABINET</div><div class="ps-story-hed">PM holds unscheduled security council meeting; Defence Minister summoned from overseas visit</div><div class="ps-story-byline">North Block Correspondent · New Delhi</div><div class="ps-story-body">An emergency session of the Cabinet Committee on Security was convened late Thursday. Three service chiefs and the NSA were present. No official readout was issued.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">ALLIANCE</div><div class="ps-story-hed">INDIA bloc seat-sharing deadlock enters third week; Bihar and UP remain unresolved</div><div class="ps-story-byline">Political Bureau · Kolkata</div><div class="ps-story-body">Senior leaders from seven opposition parties failed to reach consensus on seat allocation in Bihar, UP, and Maharashtra ahead of the general election schedule.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">PROTEST</div><div class="ps-story-hed">Wrestlers threaten indefinite dharna outside Parliament if WFI chief not removed by Friday</div><div class="ps-story-byline">Sports Desk · New Delhi</div><div class="ps-story-body">Four Olympic-medal-winning athletes announced they will camp outside Parliament from Monday unless the government acts on pending harassment complaints against the federation.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">GOVERNANCE</div><div class="ps-story-hed">Supreme Court stays Madhya Pradesh OBC reservation hike pending fresh census data review</div><div class="ps-story-byline">Legal Correspondent · New Delhi</div><div class="ps-story-body">A bench of three judges issued an interim stay on the state government's notification raising OBC reservation to 35 percent, seeking fresh affidavits within four weeks.</div></div>
+              </div>
+              <div class="ps-col">
+                <div class="ps-story"><div class="ps-story-tag">SCANDAL</div><div class="ps-story-hed">CBI names sitting MLA in disproportionate assets case; arrest expected within 48 hours</div><div class="ps-story-byline">Investigative Bureau · Bhopal</div><div class="ps-story-body">The CBI filed a supplementary chargesheet naming a sitting MLA from the ruling party in a case involving assets worth Rs 180 crore beyond known income sources.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">ELECTION</div><div class="ps-story-hed">Andhra CM announces freebies worth Rs 8,000 crore days before model code of conduct kicks in</div><div class="ps-story-byline">State Correspondent · Amaravati</div><div class="ps-story-body">The ruling party unveiled a package covering free gas cylinders, cash transfers, and subsidised rice. Opposition has complained to the Election Commission alleging MCC violations.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">PARTY</div><div class="ps-story-hed">Nitish Kumar skips NDA coordination meeting for second consecutive week; speculation mounts</div><div class="ps-story-byline">Political Correspondent · Patna</div><div class="ps-story-body">The Bihar CM's continued absence from alliance meetings has triggered fresh speculation about JD(U)'s long-term commitment to the NDA, with insiders offering conflicting accounts.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">POLICY</div><div class="ps-story-hed">Centre notifies rules capping political ad spend on digital platforms at Rs 1 crore per week</div><div class="ps-story-byline">Policy Reporter · New Delhi</div><div class="ps-story-body">The Ministry of Electronics issued the gazette notification Thursday. Social media platforms have been given 30 days to implement the spending-cap enforcement mechanisms.</div></div>
+              </div>
+              <div class="ps-col">
+                <div class="ps-story"><div class="ps-story-tag">ALLIANCE</div><div class="ps-story-hed">Shiv Sena factions file competing petitions over party symbol ahead of Maharashtra polls</div><div class="ps-story-byline">Legal Bureau · Mumbai</div><div class="ps-story-body">Both the Shinde and Thackeray camps have approached the Election Commission with fresh evidence in the ongoing bow-and-arrow symbol dispute.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">GOVERNANCE</div><div class="ps-story-hed">Rajasthan tables anti-corruption bill; opposition demands joint parliamentary committee review</div><div class="ps-story-byline">Legislative Correspondent · Jaipur</div><div class="ps-story-body">The bill proposes fast-track courts for corruption cases involving officials at joint secretary rank and above. Treasury benches passed it on a voice vote after a three-hour debate.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">CABINET</div><div class="ps-story-hed">Kerala CM reshuffles three departments; senior IAS officer moved out of home ministry</div><div class="ps-story-byline">State Bureau · Thiruvananthapuram</div><div class="ps-story-body">The reshuffle is seen as an attempt to address party worker complaints about administrative functioning ahead of local body elections scheduled for next quarter.</div></div>
+                <div class="ps-story"><div class="ps-story-tag">ELECTION</div><div class="ps-story-hed">JMM releases first candidate list; women nominees raised to 30 percent of total contested seats</div><div class="ps-story-byline">Eastern Bureau · Ranchi</div><div class="ps-story-body">Jharkhand Mukti Morcha's first list signals a significant shift in voter outreach strategy with a substantially higher proportion of women than the previous election cycle.</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="ps-fade-bot"></div>
+        <div class="ps-lock-hint">🔒 Sign in to unlock your full intelligence feed</div>
+      </div>
+    </div>
+    """
+
+    # Split layout: left = form, right = newspaper
+    left_col, right_col = st.columns([1, 1.8])
+
+    with right_col:
+        st.markdown(_newspaper_html, unsafe_allow_html=True)
+
+    with left_col:
+        st.markdown("""
+        <div class="ps-brand">
+          <div class="ps-brand-icon">🗳️</div>
+          <div>
+            <span class="ps-brand-name">PolitiScan</span>
+            <span class="ps-brand-sub">Political Intelligence</span>
+          </div>
+        </div>
+        <div class="ps-heading">Welcome back</div>
+        <div class="ps-subheading">Sign in to access your intelligence dashboard</div>
+        """, unsafe_allow_html=True)
+
+        if not st.session_state.get("otp_sent"):
+            st.markdown('<span class="ps-label">Work email</span>', unsafe_allow_html=True)
+            email = st.text_input(
+                "Work email", key="login_email_input",
+                label_visibility="collapsed",
+                placeholder="you@consultancy.com",
+            )
+            if st.button("Send one-time code →", type="primary", use_container_width=True):
+                if email not in ALLOWED_EMAILS:
+                    st.error("Access denied. Contact your administrator.")
+                else:
+                    otp = generate_otp()
+                    st.session_state.otp           = otp
+                    st.session_state.otp_timestamp = datetime.now()
+                    st.session_state.login_email   = email
+                    sent, send_err = send_otp_email(email, otp)
+                    if sent:
+                        st.session_state.otp_sent = True
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to send OTP: {send_err}")
+        else:
+            st.markdown(
+                f'<div class="ps-notice">🕐 &nbsp; Code sent to {st.session_state.login_email} &nbsp;·&nbsp; expires in 10 min</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown('<span class="ps-label">6-digit code</span>', unsafe_allow_html=True)
+            code = st.text_input(
+                "6-digit code", max_chars=6, key="otp_input",
+                label_visibility="collapsed",
+                placeholder="······",
+            )
+            if st.button("Verify and sign in →", type="primary", use_container_width=True):
+                if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
+                    st.session_state.logged_in  = True
+                    st.session_state.user_email = st.session_state.login_email
+                    for k in ("otp", "otp_timestamp", "otp_sent", "login_email"):
+                        st.session_state.pop(k, None)
+                    st.rerun()
+                else:
+                    st.error("Invalid or expired code. Please try again.")
+            if st.button("Resend code", use_container_width=True):
                 otp = generate_otp()
                 st.session_state.otp           = otp
                 st.session_state.otp_timestamp = datetime.now()
-                st.session_state.login_email   = email
-                sent, send_err = send_otp_email(email, otp)
+                sent, send_err = send_otp_email(st.session_state.login_email, otp)
                 if sent:
-                    st.session_state.otp_sent = True
-                    st.rerun()
+                    st.success("New code sent.")
                 else:
-                    st.error(f"Failed to send OTP: {send_err}")
-    else:
-        st.success(f"OTP sent to {st.session_state.login_email}. Enter the 6-digit code below.")
-        code = st.text_input("6-digit code", max_chars=6, key="otp_input")
-        if st.button("Verify", type="primary"):
-            if verify_otp(code, st.session_state.otp, st.session_state.otp_timestamp):
-                st.session_state.logged_in  = True
-                st.session_state.user_email = st.session_state.login_email
-                # Clear login state
-                for k in ("otp", "otp_timestamp", "otp_sent", "login_email"):
-                    st.session_state.pop(k, None)
-                st.rerun()
-            else:
-                st.error("Invalid or expired code. Please try again.")
+                    st.error(f"Failed to resend: {send_err}")
+
+        st.markdown("""
+        <div class="ps-footer">
+          <span>🔒 Secure · Authorised users only</span>
+          <span>v4.0</span>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.stop()
 
