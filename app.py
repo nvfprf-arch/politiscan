@@ -805,71 +805,109 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Top bar (shown only when logged in)
+# Sidebar styling (shown only when logged in)
 # ---------------------------------------------------------------------------
-
-# Initialise active page in session state
-if "active_page" not in st.session_state:
-    st.session_state.active_page = "News"
-
 st.markdown("""
 <style>
-.topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 0 14px 0;
-    border-bottom: 1.5px solid #1a1a1a;
-    margin-bottom: 18px;
+section[data-testid="stSidebar"] {
+    background-color: #eae3d6 !important;
 }
-.topbar-logo {
-    font-family: "Georgia","Times New Roman",serif;
-    font-size: 28px;
-    font-weight: 700;
-    color: #1a1a1a;
-    letter-spacing: -0.5px;
+section[data-testid="stSidebar"] .stSelectbox label,
+section[data-testid="stSidebar"] .stMultiSelect label,
+section[data-testid="stSidebar"] .stTextInput label {
+    font-family: "Georgia","Times New Roman",serif !important;
+    font-size: 9px !important;
+    letter-spacing: 0.14em !important;
+    text-transform: uppercase !important;
+    color: #8a7a5a !important;
 }
-.topbar-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+section[data-testid="stSidebar"] .stSelectbox > div > div,
+section[data-testid="stSidebar"] .stMultiSelect > div > div {
+    background-color: #e0d9cc !important;
+    border: 0.5px solid #1a1a1a !important;
+    border-radius: 5px !important;
+    font-family: "Georgia","Times New Roman",serif !important;
+    font-size: 13px !important;
+}
+section[data-testid="stSidebar"] .stButton > button {
+    background-color: #1a1a1a !important;
+    color: #f4efe3 !important;
+    border: none !important;
+    border-radius: 5px !important;
+    font-family: "Georgia","Times New Roman",serif !important;
+    font-size: 10.5px !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+    width: 100% !important;
+}
+section[data-testid="stSidebar"] .stButton > button p,
+section[data-testid="stSidebar"] .stButton > button span {
+    color: #f4efe3 !important;
+}
+section[data-testid="stSidebar"] hr {
+    border-color: #c8b898 !important;
+}
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    font-family: "Georgia","Times New Roman",serif !important;
+    color: #1a1a1a !important;
+}
+.sb-masthead {
     font-family: "Georgia","Times New Roman",serif;
-    font-size: 12px;
-    color: #7a6a4a;
+    font-size: 20px; font-weight: 700;
+    text-align: center; color: #1a1a1a;
+    padding: 4px 0 8px 0; letter-spacing: -0.3px;
+}
+.sb-rule-thick { height: 2.5px; background: #1a1a1a; margin: 0; }
+.sb-rule-thin  { height: 1px; background: #b0a080; margin-top: 2px; }
+.sb-dateline {
+    font-family: "Georgia","Times New Roman",serif;
+    font-size: 8px; letter-spacing: 0.16em;
+    text-transform: uppercase; text-align: center;
+    color: #8a7a5a; padding: 6px 0 8px 0;
+    border-bottom: 0.5px solid #c8b898; margin-bottom: 12px;
+}
+.sb-double {
+    border-top: 2px solid #1a1a1a;
+    border-bottom: 0.5px solid #1a1a1a;
+    height: 5px; margin: 14px 0;
+}
+.sb-section-cap {
+    font-family: "Georgia","Times New Roman",serif;
+    font-size: 8px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: #8a7a5a;
+    margin-bottom: 2px; margin-top: 8px;
+}
+.sb-nav-on {
+    display: block;
+    font-family: "Georgia","Times New Roman",serif;
+    font-size: 14px; color: #1a1a1a;
+    padding: 5px 0 5px 11px;
+    border-left: 2.5px solid #1a1a1a;
+    margin-bottom: 3px;
+}
+.sb-nav-off {
+    display: block;
+    font-family: "Georgia","Times New Roman",serif;
+    font-size: 14px; color: #b0a080;
+    padding: 5px 0 5px 11px;
+    border-left: 2.5px solid transparent;
+    margin-bottom: 3px;
+}
+.sb-user-email {
+    font-family: "Georgia","Times New Roman",serif;
+    font-size: 11px; font-style: italic;
+    color: #8a7a5a; margin-bottom: 8px;
+}
+.sb-logout-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    border: 0.5px solid #1a1a1a; border-radius: 20px;
+    padding: 4px 12px; font-size: 11px; color: #1a1a1a;
+    font-family: "Georgia","Times New Roman",serif; cursor: pointer;
 }
 </style>
-<div class="topbar">
-    <div class="topbar-logo">PolitiScan</div>
-    <div class="topbar-right" id="topbar-right-placeholder"></div>
-</div>
 """, unsafe_allow_html=True)
-
-# Toggle and logout rendered as Streamlit buttons in columns
-tb_col1, tb_col2, tb_col3, tb_col4, tb_col5 = st.columns([3, 1, 1, 2, 1])
-
-with tb_col2:
-    if st.button("📰 News", key="nav_news",
-                 type="primary" if st.session_state.active_page == "News" else "secondary"):
-        st.session_state.active_page = "News"
-        st.rerun()
-
-with tb_col3:
-    if st.button("▶ YouTube", key="nav_yt",
-                 type="primary" if st.session_state.active_page == "YouTube" else "secondary"):
-        st.session_state.active_page = "YouTube"
-        st.rerun()
-
-with tb_col4:
-    st.markdown(
-        f"<div style='font-family:Georgia,serif;font-size:12px;color:#7a6a4a;"
-        f"text-align:right;padding-top:6px;'>{st.session_state.get('user_email','')}</div>",
-        unsafe_allow_html=True
-    )
-
-with tb_col5:
-    if st.button("Logout", key="logout_btn"):
-        st.session_state.logged_in = False
-        st.rerun()
 
 # Load/refresh client profile once per session
 if "profile_loaded" not in st.session_state:
@@ -1096,7 +1134,43 @@ def _show_results():
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.header("Scan Parameters")
+    today_str = datetime.now().strftime("%a %-d %B %Y")
+    active_page = st.session_state.get("active_page", "News")
+
+    st.markdown(f"""
+<div class="sb-masthead">PolitiScan</div>
+<div class="sb-rule-thick"></div>
+<div class="sb-rule-thin"></div>
+<div class="sb-dateline">Bengaluru &middot; {today_str}</div>
+<div class="sb-section-cap">Intelligence</div>
+<span class="sb-nav-{'on' if active_page == 'News' else 'off'}">News</span>
+<div class="sb-section-cap">Video Monitor</div>
+<span class="sb-nav-{'on' if active_page == 'YouTube' else 'off'}">YouTube</span>
+""", unsafe_allow_html=True)
+
+    col_news, col_yt = st.columns(2)
+    with col_news:
+        if st.button("News", key="nav_news", use_container_width=True):
+            st.session_state.active_page = "News"
+            st.rerun()
+    with col_yt:
+        if st.button("YouTube", key="nav_yt", use_container_width=True):
+            st.session_state.active_page = "YouTube"
+            st.rerun()
+
+    st.markdown(f"""
+<div style="margin-top:12px;">
+<div class="sb-user-email">{st.session_state.user_email}</div>
+</div>
+""", unsafe_allow_html=True)
+
+    if st.button("⇥  logout", key="logout_btn", use_container_width=False):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+    st.markdown('<div class="sb-double"></div>', unsafe_allow_html=True)
+    st.markdown("**Scan Parameters**")
     state    = st.selectbox("State / UT", sorted(REGIONS.keys()))
     district = st.selectbox("District", REGIONS[state])
 
