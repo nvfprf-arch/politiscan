@@ -635,77 +635,95 @@ if DEV_MODE:
 
 if not st.session_state.get("logged_in"):
     # Hide sidebar entirely on login page
-    st.markdown(
-        '<style>'
-        '[data-testid="stSidebarNav"], [data-testid="stSidebarNavItems"],'
-        'section[data-testid="stSidebar"] ul, .st-emotion-cache-1cypcdb,'
-        'nav[data-testid="stSidebarNav"], section[data-testid="stSidebar"] {display: none !important;}'
-        # Dark page background
-        '.stApp { background-color: #0a0a0a !important; }'
-        'header[data-testid="stHeader"] { background-color: #0a0a0a !important; }'
-        # Main content block becomes the cream card
-        '[data-testid="stAppViewBlockContainer"] {'
-        '  background: #f4efe3 !important;'
-        '  border: 1.5px solid #1a1a1a !important;'
-        '  box-shadow: 0 0 0 5px #f4efe3, 0 0 0 6px #b0a080 !important;'
-        '  max-width: 600px !important;'
-        '  margin: 4vh auto !important;'
-        '  padding: 2rem 2.5rem 2rem !important;'
-        '  border-radius: 2px !important;'
-        '}'
-        # Force all text dark on the cream background
-        '[data-testid="stAppViewBlockContainer"] * { color: #1a1a1a !important; }'
-        # Newspaper typographic elements
-        '.np-rule-thick { height:3px; background:#1a1a1a; margin-bottom:3px; }'
-        '.np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.75rem; }'
-        '.np-masthead { font-family:"Georgia","Times New Roman",serif; font-size:42px; font-weight:700;'
-        '  color:#1a1a1a !important; text-align:center; line-height:1; margin-bottom:0.5rem; }'
-        '.np-meta { display:flex; align-items:center; gap:6px; margin-bottom:1rem; }'
-        '.np-meta-rule { flex:1; height:0.5px; background:#b0a080; }'
-        '.np-meta-text { font-family:"Georgia","Times New Roman",serif; font-size:9px;'
-        '  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; white-space:nowrap; }'
-        '.np-divider { border:none; border-top:2.5px double #1a1a1a; margin:0 0 1.25rem 0; }'
-        '.np-subhead { font-family:"Georgia","Times New Roman",serif; font-size:12.5px;'
-        '  font-style:italic; color:#4a3e28 !important; text-align:center; margin-bottom:1.5rem; }'
-        '.np-label { font-family:"Georgia","Times New Roman",serif; font-size:9px;'
-        '  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; display:block; margin-bottom:4px; }'
-        '.np-section-divider { border:none; border-top:1px solid #c8b898; margin:1.25rem 0; }'
-        '.np-otp-note { font-family:"Georgia","Times New Roman",serif; font-size:11.5px;'
-        '  font-style:italic; color:#7a6a4a !important; text-align:center; margin-bottom:1rem; }'
-        '.np-footer { font-family:"Georgia","Times New Roman",serif; font-size:8px; letter-spacing:0.1em;'
-        '  text-transform:uppercase; color:#b0a080 !important; text-align:center;'
-        '  margin-top:1.5rem; padding-top:0.75rem; border-top:0.5px solid #c8b898; }'
-        # Inputs — underline only, transparent bg
-        '[data-testid="stAppViewBlockContainer"] .stTextInput input {'
-        '  background: transparent !important; border: none !important;'
-        '  border-bottom: 1.5px solid #1a1a1a !important; border-radius: 0 !important;'
-        '  color: #1a1a1a !important; font-family:"Georgia","Times New Roman",serif !important;'
-        '  font-size: 14px !important; box-shadow: none !important; }'
-        '[data-testid="stAppViewBlockContainer"] .stTextInput input::placeholder {'
-        '  color: #b0a080 !important; font-style: italic; }'
-        # Primary button — solid black
-        '[data-testid="stAppViewBlockContainer"] button[kind="primary"] {'
-        '  background: #1a1a1a !important; color: #f4efe3 !important;'
-        '  border: none !important; border-radius: 0 !important;'
-        '  font-family:"Georgia","Times New Roman",serif !important;'
-        '  font-size: 10.5px !important; letter-spacing: 0.18em !important;'
-        '  text-transform: uppercase !important; width: 100% !important; }'
-        # Secondary button — outline
-        '[data-testid="stAppViewBlockContainer"] button[kind="secondary"] {'
-        '  background: transparent !important; color: #1a1a1a !important;'
-        '  border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;'
-        '  font-family:"Georgia","Times New Roman",serif !important;'
-        '  font-size: 10.5px !important; letter-spacing: 0.18em !important;'
-        '  text-transform: uppercase !important; width: 100% !important; }'
-        '</style>',
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+<style>
+/* Hide sidebar */
+section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none !important; }
+
+/* Dark page background */
+.stApp, .stApp > div, section.main { background-color: #0a0a0a !important; }
+
+/* The cream card — target the inner block container */
+section.main > div:first-child {
+    background: #0a0a0a !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+    min-height: 100vh !important;
+    padding: 5vh 1rem !important;
+}
+
+/* Cream box wrapping all content */
+.np-card {
+    background: #f4efe3;
+    border: 1.5px solid #1a1a1a;
+    box-shadow: 0 0 0 5px #f4efe3, 0 0 0 6px #b0a080;
+    border-radius: 2px;
+    width: 100%;
+    max-width: 560px;
+    padding: 2rem 2.5rem 1.75rem;
+    margin: 0 auto;
+}
+
+/* Newspaper elements */
+.np-rule-thick { height:3px; background:#1a1a1a; margin-bottom:3px; }
+.np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.75rem; }
+.np-masthead   { font-family:"Georgia","Times New Roman",serif; font-size:42px; font-weight:700;
+                 color:#1a1a1a; text-align:center; line-height:1; margin-bottom:0.5rem; }
+.np-meta       { display:flex; align-items:center; gap:6px; margin-bottom:1rem; }
+.np-meta-rule  { flex:1; height:0.5px; background:#b0a080; }
+.np-meta-text  { font-family:"Georgia","Times New Roman",serif; font-size:9px;
+                 letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a; white-space:nowrap; }
+.np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0 0 1.25rem 0; }
+.np-subhead    { font-family:"Georgia","Times New Roman",serif; font-size:12.5px;
+                 font-style:italic; color:#4a3e28; text-align:center; margin-bottom:1.5rem; }
+.np-label      { font-family:"Georgia","Times New Roman",serif; font-size:9px;
+                 letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a;
+                 display:block; margin-bottom:4px; }
+.np-section-divider { border:none; border-top:1px solid #c8b898; margin:1.25rem 0; }
+.np-otp-note   { font-family:"Georgia","Times New Roman",serif; font-size:11.5px;
+                 font-style:italic; color:#7a6a4a; text-align:center; margin-bottom:1rem; }
+.np-footer     { font-family:"Georgia","Times New Roman",serif; font-size:8px; letter-spacing:0.1em;
+                 text-transform:uppercase; color:#b0a080; text-align:center;
+                 margin-top:1.5rem; padding-top:0.75rem; border-top:0.5px solid #c8b898; }
+
+/* Streamlit widgets inside card — override dark theme */
+.stTextInput input {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1.5px solid #1a1a1a !important;
+    border-radius: 0 !important;
+    color: #1a1a1a !important;
+    font-family: "Georgia","Times New Roman",serif !important;
+    font-size: 14px !important;
+    box-shadow: none !important;
+}
+.stTextInput input::placeholder { color: #b0a080 !important; font-style: italic; }
+.stTextInput label { color: #7a6a4a !important; }
+
+button[kind="primary"] {
+    background: #1a1a1a !important; color: #f4efe3 !important;
+    border: none !important; border-radius: 0 !important;
+    font-family: "Georgia","Times New Roman",serif !important;
+    font-size: 10.5px !important; letter-spacing: 0.18em !important;
+    text-transform: uppercase !important; width: 100% !important;
+}
+button[kind="secondary"] {
+    background: transparent !important; color: #1a1a1a !important;
+    border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;
+    font-family: "Georgia","Times New Roman",serif !important;
+    font-size: 10.5px !important; letter-spacing: 0.18em !important;
+    text-transform: uppercase !important; width: 100% !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
     # Build the date string for the dateline
     today_str = datetime.now().strftime("%A, %-d %B %Y")
 
-    # Masthead block
+    # Masthead block — open the cream card
     st.markdown(f'''
+        <div class="np-card">
         <div class="np-rule-thick"></div>
         <div class="np-rule-thin"></div>
         <div class="np-masthead">PolitiScan</div>
@@ -771,7 +789,7 @@ if not st.session_state.get("logged_in"):
                 st.error(f"Failed to resend: {send_err}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="np-footer">For authorised personnel only &middot; PolitiScan Intelligence</div>',
+    st.markdown('<div class="np-footer">For authorised personnel only &middot; PolitiScan Intelligence</div></div>',
                 unsafe_allow_html=True)
     st.stop()
 
