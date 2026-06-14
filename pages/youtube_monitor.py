@@ -418,7 +418,7 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
         )
 
         display_df = df[["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"]]
-        table_height = min(len(display_df) * 100 + 50, 1200)
+        table_height = min(len(display_df) * 120 + 50, 1400)
 
         st.dataframe(
             styled,
@@ -432,7 +432,6 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             hide_index=True,
             height=table_height,
             use_container_width=True,
-            wrap_text=True,
         )
 
     # ── PDF Report ────────────────────────────────────────────────────────────
