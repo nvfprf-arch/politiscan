@@ -681,7 +681,7 @@ if "profile_loaded" not in st.session_state:
     st.session_state.profile_loaded = True
 
 
-_COL_ORDER = ["Rank", "Score", "Tag", "Region", "Report Type", "Signals",
+_COL_ORDER = ["Rank", "Score", "Tag", "Report Type",
               "Headline", "Sources", "Language", "Summary", "Link"]
 
 _TYPE_STYLES = {
