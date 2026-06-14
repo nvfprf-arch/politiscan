@@ -634,6 +634,7 @@ if DEV_MODE:
     st.session_state.user_email = "dev@test.com"
 
 if not st.session_state.get("logged_in"):
+    st.markdown("<style>[data-testid='stSidebarNav'] {display: none;}</style>", unsafe_allow_html=True)
     st.title("PolitiScan")
     st.subheader("Political Intelligence Dashboard")
 
