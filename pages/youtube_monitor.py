@@ -462,16 +462,8 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
         df = pd.DataFrame(rows)
         df["Score"] = df["Score"].apply(lambda x: round(float(x), 2))
 
-        def _score_style(val):
-            if val >= 8:
-                return "background-color: #ff4b4b; color: white"
-            if val >= 6:
-                return "background-color: #ffa500"
-            return ""
-
         styled = (
             df.style
-            .map(_score_style, subset=["Score"])
             .apply(_style_report_type, subset=["Report Type"])
         )
 
