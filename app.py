@@ -651,36 +651,36 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
     border-radius: 2px !important;
     max-width: 580px !important;
     margin: 5vh auto !important;
-    padding: 2rem 2.5rem 2rem !important;
+    padding: 1.25rem 2.5rem 1.25rem !important;
 }
 
 /* All text dark */
 .block-container, .block-container * { color: #1a1a1a !important; }
 
 /* Newspaper elements */
-.np-rule-thick { height:3px; background:#1a1a1a; margin-bottom:3px; }
-.np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.3rem; }
+.np-rule-thick { height:3px; background:#1a1a1a; margin-bottom:2px; }
+.np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.15rem; }
 .np-masthead   { font-family:"Georgia","Times New Roman",serif; font-size:42px; font-weight:700;
-                 color:#1a1a1a; text-align:center; line-height:1; margin-bottom:0.4rem; }
-.np-meta       { display:flex; align-items:center; gap:6px; margin-bottom:0.3rem; }
+                 color:#1a1a1a; text-align:center; line-height:1; margin-bottom:0.2rem; }
+.np-meta       { display:flex; align-items:center; gap:6px; margin-bottom:0.15rem; }
 .np-meta-rule  { flex:1; height:0.5px; background:#b0a080; }
 .np-meta-text  { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; white-space:nowrap; }
-.np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0.2rem 0 0.4rem 0; }
+.np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0.1rem 0 0.25rem 0; }
 .np-tagline    { font-family:"Georgia","Times New Roman",serif; font-size:15px;
                  font-weight:700; color:#1a1a1a !important; text-align:center;
-                 margin:0.6rem 0 0.4rem 0; line-height:1.45; }
+                 margin:0.2rem 0 0.15rem 0; line-height:1.4; }
 .np-subhead    { font-family:"Georgia","Times New Roman",serif; font-size:11px;
-                 font-style:italic; color:#7a6a4a !important; text-align:center; margin:0 0 1rem 0; }
+                 font-style:italic; color:#7a6a4a !important; text-align:center; margin:0 0 0.5rem 0; }
 .np-label      { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important;
-                 display:block; margin-bottom:4px; }
-.np-section-divider { border:none; border-top:1px solid #c8b898; margin:1rem 0; }
+                 display:block; margin-bottom:2px; margin-top:0.4rem; }
+.np-section-divider { border:none; border-top:1px solid #c8b898; margin:0.4rem 0 0.3rem 0; }
 .np-otp-note   { font-family:"Georgia","Times New Roman",serif; font-size:11.5px;
-                 font-style:italic; color:#7a6a4a !important; text-align:center; margin-bottom:0.75rem; }
+                 font-style:italic; color:#7a6a4a !important; text-align:center; margin:0.3rem 0 0.2rem 0; }
 .np-footer     { font-family:"Georgia","Times New Roman",serif; font-size:8px; letter-spacing:0.1em;
                  text-transform:uppercase; color:#b0a080 !important; text-align:center;
-                 margin-top:1.5rem; padding-top:0.75rem; border-top:0.5px solid #c8b898; }
+                 margin-top:0.6rem; padding-top:0.4rem; border-top:0.5px solid #c8b898; }
 
 /* Inputs */
 .block-container .stTextInput input {
