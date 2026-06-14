@@ -681,8 +681,7 @@ if "profile_loaded" not in st.session_state:
     st.session_state.profile_loaded = True
 
 
-_COL_ORDER = ["Rank", "Score", "Report Type",
-              "Headline", "Sources", "Language", "Summary", "Link"]
+_COL_ORDER = ["Rank", "Score", "Headline", "Summary", "Sources", "Language", "Report Type", "Link"]
 
 _TYPE_STYLES = {
     "CONFIRMED":   "background-color: #1a472a; color: white",
@@ -705,12 +704,22 @@ _TH = "padding:6px 10px;text-align:left;border-bottom:1px solid #444;white-space
 _TD = "padding:6px 10px;vertical-align:top;"
 
 
-def _render_article_table(rows: list) -> None:
-    """Render a list of article row dicts as a styled HTML table."""
-    header_html = "".join(f"<th style='{_TH}'>{c}</th>" for c in _COL_ORDER)
+def _render_article_table(rows: list, show_checkboxes: bool = False) -> None:
+    """Render a list of article row dicts as a styled HTML table.
+    When show_checkboxes=True, a leading checkbox column is added per row.
+    """
+    col_headers = ([""] if show_checkboxes else []) + list(_COL_ORDER)
+    header_html = "".join(f"<th style='{_TH}'>{c}</th>" for c in col_headers)
     body_html = ""
     for row in rows:
         cells = ""
+        if show_checkboxes:
+            link = (row.get("Link", "") or "").replace('"', "&quot;")
+            cells += (
+                f"<td style='{_TD};text-align:center;'>"
+                f"<input type='checkbox' class='article-check' value=\"{link}\">"
+                f"</td>"
+            )
         for col in _COL_ORDER:
             val = row.get(col, "") or ""
             if col == "Report Type":
@@ -736,7 +745,6 @@ def _render_article_table(rows: list) -> None:
 
 def _show_results():
     """Render AI Shortlist section, Read All section, and Export to PDF."""
-    import pandas as pd
 
     st.info(st.session_state.results_caption)
 
@@ -799,33 +807,80 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            _render_article_table(non_shortlist)
-
-            available_headlines = [r.get("Headline", "") for r in non_shortlist if r.get("Headline")]
-            selected_headlines = st.multiselect(
-                "Select articles to add to shortlist",
-                options=available_headlines,
-                placeholder="Select articles to promote...",
+            # Hidden text input — JS writes checked links here to trigger a rerun
+            _raw_selection = st.text_input(
+                "article_selection_state",
+                value="",
+                key="article_selection_state",
+                label_visibility="collapsed",
+                placeholder="__article_selection__",
             )
-            if st.button("Add to Shortlist"):
-                selected_set = set(selected_headlines)
+
+            _render_article_table(non_shortlist, show_checkboxes=True)
+
+            # Sticky floating button + JS that reads checkboxes and updates the hidden input
+            st.markdown("""
+<style>
+#_ps_add_btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 9999;
+    background-color: #FF4B4B;
+    color: white;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+}
+#_ps_add_btn:hover { background-color: #cc3a3a; }
+</style>
+<button id="_ps_add_btn" onclick="_psAddToShortlist()">Add to Shortlist</button>
+<script>
+function _psAddToShortlist() {
+    var checked = Array.from(
+        document.querySelectorAll('.article-check:checked')
+    ).map(function(cb) { return cb.value; });
+    if (checked.length === 0) {
+        alert('Check at least one article first.');
+        return;
+    }
+    var inp = document.querySelector('input[placeholder="__article_selection__"]');
+    if (!inp) { alert('Selection input not found. Refresh and try again.'); return; }
+    var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(inp, JSON.stringify(checked));
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+}
+</script>
+""", unsafe_allow_html=True)
+
+            # Process selections submitted by the sticky button
+            if _raw_selection:
+                try:
+                    selected_links = set(json.loads(_raw_selection))
+                except Exception:
+                    selected_links = set()
                 count = 0
                 for row in non_shortlist:
-                    if row.get("Headline") in selected_set:
+                    if row.get("Link") in selected_links:
                         article = {
-                            "url":                   row.get("Link", ""),
-                            "headline":              row.get("Headline", ""),
-                            "primary_tag":           row.get("Tag", ""),
-                            "final_score":           row.get("Score", 0),
-                            "source_name":           row.get("Sources", ""),
+                            "url":          row.get("Link", ""),
+                            "headline":     row.get("Headline", ""),
+                            "primary_tag":  row.get("Tag", ""),
+                            "final_score":  row.get("Score", 0),
+                            "source_name":  row.get("Sources", ""),
                             "affects_client_region": False,
                         }
                         record_promotion(st.session_state.user_email, article)
                         if row not in st.session_state.shortlist_articles:
                             st.session_state.shortlist_articles.append(row)
                         count += 1
+                st.session_state["article_selection_state"] = ""
                 if count > 0:
-                    st.success(f"{count} articles added to your shortlist.")
+                    st.success(f"{count} article{'s' if count != 1 else ''} added to your shortlist.")
                     st.rerun()
         else:
             st.caption("All scanned articles are already in your shortlist.")
