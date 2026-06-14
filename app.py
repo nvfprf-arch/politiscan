@@ -637,35 +637,27 @@ if not st.session_state.get("logged_in"):
     # Hide sidebar entirely on login page
     st.markdown("""
 <style>
-/* Hide sidebar */
+/* Hide sidebar and header */
 section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none !important; }
 
-/* Dark page background */
-.stApp, .stApp > div, section.main { background-color: #0a0a0a !important; }
+/* Dark outer background */
+.stApp { background-color: #0a0a0a !important; }
 
-/* The cream card — target the inner block container */
-section.main > div:first-child {
-    background: #0a0a0a !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: flex-start !important;
-    min-height: 100vh !important;
-    padding: 5vh 1rem !important;
+/* Centre column — this is what Streamlit actually renders widgets into */
+.block-container {
+    background: #f4efe3 !important;
+    border: 1.5px solid #1a1a1a !important;
+    box-shadow: 0 0 0 5px #f4efe3, 0 0 0 6px #b0a080 !important;
+    border-radius: 2px !important;
+    max-width: 580px !important;
+    margin: 5vh auto !important;
+    padding: 2rem 2.5rem 2rem !important;
 }
 
-/* Cream box wrapping all content */
-.np-card {
-    background: #f4efe3;
-    border: 1.5px solid #1a1a1a;
-    box-shadow: 0 0 0 5px #f4efe3, 0 0 0 6px #b0a080;
-    border-radius: 2px;
-    width: 100%;
-    max-width: 560px;
-    padding: 2rem 2.5rem 1.75rem;
-    margin: 0 auto;
-}
+/* All text inside block-container goes dark */
+.block-container, .block-container * { color: #1a1a1a !important; }
 
-/* Newspaper elements */
+/* Newspaper typographic elements */
 .np-rule-thick { height:3px; background:#1a1a1a; margin-bottom:3px; }
 .np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.75rem; }
 .np-masthead   { font-family:"Georgia","Times New Roman",serif; font-size:42px; font-weight:700;
@@ -673,22 +665,22 @@ section.main > div:first-child {
 .np-meta       { display:flex; align-items:center; gap:6px; margin-bottom:1rem; }
 .np-meta-rule  { flex:1; height:0.5px; background:#b0a080; }
 .np-meta-text  { font-family:"Georgia","Times New Roman",serif; font-size:9px;
-                 letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a; white-space:nowrap; }
+                 letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; white-space:nowrap; }
 .np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0 0 1.25rem 0; }
 .np-subhead    { font-family:"Georgia","Times New Roman",serif; font-size:12.5px;
-                 font-style:italic; color:#4a3e28; text-align:center; margin-bottom:1.5rem; }
+                 font-style:italic; color:#4a3e28 !important; text-align:center; margin-bottom:1.5rem; }
 .np-label      { font-family:"Georgia","Times New Roman",serif; font-size:9px;
-                 letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a;
+                 letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important;
                  display:block; margin-bottom:4px; }
 .np-section-divider { border:none; border-top:1px solid #c8b898; margin:1.25rem 0; }
 .np-otp-note   { font-family:"Georgia","Times New Roman",serif; font-size:11.5px;
-                 font-style:italic; color:#7a6a4a; text-align:center; margin-bottom:1rem; }
+                 font-style:italic; color:#7a6a4a !important; text-align:center; margin-bottom:1rem; }
 .np-footer     { font-family:"Georgia","Times New Roman",serif; font-size:8px; letter-spacing:0.1em;
-                 text-transform:uppercase; color:#b0a080; text-align:center;
+                 text-transform:uppercase; color:#b0a080 !important; text-align:center;
                  margin-top:1.5rem; padding-top:0.75rem; border-top:0.5px solid #c8b898; }
 
-/* Streamlit widgets inside card — override dark theme */
-.stTextInput input {
+/* Inputs — transparent bg, underline only */
+.block-container .stTextInput input {
     background: transparent !important;
     border: none !important;
     border-bottom: 1.5px solid #1a1a1a !important;
@@ -698,17 +690,18 @@ section.main > div:first-child {
     font-size: 14px !important;
     box-shadow: none !important;
 }
-.stTextInput input::placeholder { color: #b0a080 !important; font-style: italic; }
-.stTextInput label { color: #7a6a4a !important; }
+.block-container .stTextInput input::placeholder { color: #b0a080 !important; font-style: italic; }
+.block-container .stTextInput input:focus { border-bottom-color: #3a3020 !important; }
 
-button[kind="primary"] {
+/* Buttons */
+.block-container button[kind="primary"] {
     background: #1a1a1a !important; color: #f4efe3 !important;
     border: none !important; border-radius: 0 !important;
     font-family: "Georgia","Times New Roman",serif !important;
     font-size: 10.5px !important; letter-spacing: 0.18em !important;
     text-transform: uppercase !important; width: 100% !important;
 }
-button[kind="secondary"] {
+.block-container button[kind="secondary"] {
     background: transparent !important; color: #1a1a1a !important;
     border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;
     font-family: "Georgia","Times New Roman",serif !important;
@@ -721,9 +714,8 @@ button[kind="secondary"] {
     # Build the date string for the dateline
     today_str = datetime.now().strftime("%A, %-d %B %Y")
 
-    # Masthead block — open the cream card
+    # Masthead block
     st.markdown(f'''
-        <div class="np-card">
         <div class="np-rule-thick"></div>
         <div class="np-rule-thin"></div>
         <div class="np-masthead">PolitiScan</div>
@@ -789,7 +781,7 @@ button[kind="secondary"] {
                 st.error(f"Failed to resend: {send_err}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="np-footer">For authorised personnel only &middot; PolitiScan Intelligence</div></div>',
+    st.markdown('<div class="np-footer">For authorised personnel only &middot; PolitiScan Intelligence</div>',
                 unsafe_allow_html=True)
     st.stop()
 
