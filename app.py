@@ -681,7 +681,7 @@ if "profile_loaded" not in st.session_state:
     st.session_state.profile_loaded = True
 
 
-_COL_ORDER = ["Rank", "Score", "Headline", "Summary", "Sources", "Language", "Report Type", "Link"]
+_COL_ORDER = ["Rank", "Score", "Report Type", "Headline", "Summary", "Sources", "Language", "Link"]
 
 _TYPE_STYLES = {
     "CONFIRMED":   "background-color: #1a472a; color: white",
@@ -730,6 +730,8 @@ def _render_article_table(rows: list, show_checkboxes: bool = False) -> None:
             elif col == "Score":
                 content = f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
             else:
+                if col == "Summary" and val.startswith("What happened: "):
+                    val = val[len("What happened: "):]
                 content = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             cells += f"<td style='{_TD}'>{content}</td>"
         body_html += f"<tr>{cells}</tr>"
@@ -827,6 +829,15 @@ def _show_results():
     box-shadow: 0 4px 14px rgba(0,0,0,0.35) !important;
     border: none !important;
 }
+[data-testid="stDataEditor"] .ag-row {
+    min-height: 56px !important;
+}
+[data-testid="stDataEditor"] .ag-cell {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+    line-height: 1.6 !important;
+    white-space: normal !important;
+}
 </style>
 <script>
 (function() {
@@ -848,8 +859,14 @@ def _show_results():
 </script>
 """, unsafe_allow_html=True)
 
+            def _display_val(col, row):
+                v = row.get(col, "") or ""
+                if col == "Summary" and v.startswith("What happened: "):
+                    v = v[len("What happened: "):]
+                return v
+
             editor_rows = [
-                {"selected": False, **{c: row.get(c, "") for c in _COL_ORDER}}
+                {"selected": False, **{c: _display_val(c, row) for c in _COL_ORDER}}
                 for row in non_shortlist
             ]
             edit_df = pd.DataFrame(editor_rows)[["selected"] + list(_COL_ORDER)]
