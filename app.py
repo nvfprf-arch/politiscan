@@ -662,13 +662,13 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 .np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.75rem; }
 .np-masthead   { font-family:"Georgia","Times New Roman",serif; font-size:42px; font-weight:700;
                  color:#1a1a1a; text-align:center; line-height:1; margin-bottom:0.5rem; }
-.np-meta       { display:flex; align-items:center; gap:6px; margin-bottom:1rem; }
+.np-meta       { display:flex; align-items:center; gap:6px; margin-bottom:0.5rem; }
 .np-meta-rule  { flex:1; height:0.5px; background:#b0a080; }
 .np-meta-text  { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; white-space:nowrap; }
-.np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0 0 0.5rem 0; }
+.np-divider    { border:none; border-top:2.5px double #1a1a1a; margin:0 0 0.4rem 0; }
 .np-subhead    { font-family:"Georgia","Times New Roman",serif; font-size:12.5px;
-                 font-style:italic; color:#4a3e28 !important; text-align:center; margin-bottom:1rem; }
+                 font-style:italic; color:#4a3e28 !important; text-align:center; margin-top:0; margin-bottom:1rem; }
 .np-label      { font-family:"Georgia","Times New Roman",serif; font-size:9px;
                  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important;
                  display:block; margin-bottom:4px; }
@@ -687,48 +687,7 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 }
 .block-container .stTextInput input::placeholder { color: #9a8a6a !important; font-style: italic; }
 
-/* Resend button — no border, no background, looks like plain text */
-.block-container [data-testid="stHorizontalBlock"] button,
-#resend_btn, button[data-testid="baseButton-secondary"][key="resend_btn"] {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    color: #7a6a4a !important;
-    font-family: "Georgia","Times New Roman",serif !important;
-    font-size: 11px !important;
-    font-style: italic !important;
-    letter-spacing: 0.05em !important;
-    text-transform: none !important;
-    padding: 0 !important;
-    width: auto !important;
-    display: block !important;
-    margin: 0.5rem auto 0 !important;
-}
-.block-container [data-testid="stHorizontalBlock"] button p,
-.block-container [data-testid="stHorizontalBlock"] button span {
-    color: #7a6a4a !important;
-    font-style: italic !important;
-}
-/* Target resend specifically by its position after verify button */
-.block-container .stButton:last-of-type button {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    color: #7a6a4a !important;
-    font-family: "Georgia","Times New Roman",serif !important;
-    font-size: 11px !important;
-    font-style: italic !important;
-    text-transform: none !important;
-    letter-spacing: 0.03em !important;
-    width: auto !important;
-    display: block !important;
-    margin: 0 auto !important;
-    padding: 2px 8px !important;
-}
-.block-container .stButton:last-of-type button p,
-.block-container .stButton:last-of-type button span {
-    color: #7a6a4a !important;
-}
+/* Primary button — solid black fill */
 .block-container button[kind="primary"] {
     background: #1a1a1a !important; color: #f4efe3 !important;
     border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;
@@ -737,10 +696,9 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
     text-transform: uppercase !important; width: 100% !important;
 }
 .block-container button[kind="primary"] p,
-.block-container button[kind="primary"] span {
-    color: #f4efe3 !important;
-}
-/* Secondary button — black outline, dark text */
+.block-container button[kind="primary"] span { color: #f4efe3 !important; }
+
+/* Secondary button — outline */
 .block-container button[kind="secondary"] {
     background: transparent !important; color: #1a1a1a !important;
     border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;
@@ -749,9 +707,28 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
     text-transform: uppercase !important; width: 100% !important;
 }
 .block-container button[kind="secondary"] p,
-.block-container button[kind="secondary"] span {
-    color: #1a1a1a !important;
+.block-container button[kind="secondary"] span { color: #1a1a1a !important; }
+
+/* Resend button specifically — no box, italic text */
+.block-container [data-testid="stButton"]:has(button[key="resend_btn"]) button,
+button[data-testid="baseButton-secondary"].resend-style {
+    background: transparent !important; border: none !important;
+    box-shadow: none !important; color: #7a6a4a !important;
+    font-style: italic !important; text-transform: none !important;
+    letter-spacing: 0.03em !important; font-size: 11px !important;
+    width: auto !important;
 }
+/* Fallback: style the resend via its container class */
+.np-resend-btn button {
+    background: transparent !important; border: none !important;
+    box-shadow: none !important; color: #7a6a4a !important;
+    font-family: "Georgia","Times New Roman",serif !important;
+    font-style: italic !important; text-transform: none !important;
+    letter-spacing: 0.03em !important; font-size: 11px !important;
+    width: auto !important; padding: 2px 0 !important;
+}
+.np-resend-btn button p,
+.np-resend-btn button span { color: #7a6a4a !important; font-style: italic !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -815,8 +792,7 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
             else:
                 st.error("Invalid or expired code. Please try again.")
 
-        # Resend — plain centred text, no button box
-        st.markdown('<div class="np-resend-wrap"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="np-resend-btn">', unsafe_allow_html=True)
         if st.button("↺  Resend code", key="resend_btn"):
             otp = generate_otp()
             st.session_state.otp           = otp
@@ -826,6 +802,7 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
                 st.success("New code sent.")
             else:
                 st.error(f"Failed to resend: {send_err}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="np-footer">For authorised personnel only &middot; PolitiScan Intelligence</div>',
                 unsafe_allow_html=True)
