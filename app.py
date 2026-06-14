@@ -852,16 +852,21 @@ with st.sidebar:
     st.header("Scan Parameters")
     state    = st.selectbox("State / UT", sorted(REGIONS.keys()))
     district = st.selectbox("District", REGIONS[state])
-    zone     = st.text_input("Administrative Zone", placeholder="e.g. North Zone")
 
-    state_outlet_options = ["All Outlets"] + STATE_OUTLETS.get(state, [])
+    state_outlet_options = STATE_OUTLETS.get(state, [])
+
+    # Reset outlet selection when state changes
+    if st.session_state.get("_outlets_for_state") != state:
+        st.session_state["_outlets_for_state"] = state
+        st.session_state["_outlet_selection"] = state_outlet_options
+
     selected_outlets = st.multiselect(
         "News Outlets",
         options=state_outlet_options,
-        default=["All Outlets"],
-        placeholder="Select outlets to filter...",
+        default=state_outlet_options,
+        key="_outlet_selection",
     )
-    active_outlets = [o for o in selected_outlets if o != "All Outlets"]
+    active_outlets = selected_outlets
 
     scan_clicked = st.button("Scan News", type="primary", use_container_width=True)
 
@@ -928,7 +933,7 @@ if scan_clicked:
         st.session_state.pop(key, None)
 
     api_key      = os.getenv("ANTHROPIC_API_KEY", "")
-    region_label = f"{district}, {state}" + (f" ({zone})" if zone.strip() else "")
+    region_label = f"{district}, {state}"
     st.session_state.region_label = region_label
 
     rss_result = [None, None]
