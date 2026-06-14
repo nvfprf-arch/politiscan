@@ -155,6 +155,7 @@ with st.sidebar:
     scan_button = st.button("Scan and Rank", type="primary", use_container_width=True)
 
     report_type_filter = ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
+    relevance_filter = None
     if "yt_results" in st.session_state and st.session_state["yt_results"]:
         _rt_all = "All Report Types"
         _rt_options = [_rt_all, "CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
@@ -190,6 +191,38 @@ with st.sidebar:
             report_type_filter = ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
         else:
             report_type_filter = _rt_sel
+
+        _rel_all = "All Relevance"
+        _rel_options = [_rel_all, "Viral", "Rising", "Active"]
+
+        if "yt_relevance_widget" not in st.session_state:
+            st.session_state["yt_relevance_widget"] = [_rel_all]
+            st.session_state["yt_prev_relevance"] = [_rel_all]
+
+        def _on_relevance_change():
+            current = st.session_state["yt_relevance_widget"]
+            prev = st.session_state["yt_prev_relevance"]
+            newly_added = [x for x in current if x not in prev]
+
+            if not newly_added:
+                if not current:
+                    st.session_state["yt_relevance_widget"] = [_rel_all]
+            elif _rel_all in newly_added:
+                st.session_state["yt_relevance_widget"] = [_rel_all]
+            else:
+                st.session_state["yt_relevance_widget"] = [x for x in current if x != _rel_all]
+
+            st.session_state["yt_prev_relevance"] = list(st.session_state["yt_relevance_widget"])
+
+        st.multiselect(
+            "Filter by Relevance",
+            _rel_options,
+            key="yt_relevance_widget",
+            on_change=_on_relevance_change,
+        )
+
+        _rel_sel = st.session_state["yt_relevance_widget"]
+        relevance_filter = None if _rel_all in _rel_sel else _rel_sel
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -366,6 +399,28 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
         display_results = [
             v for v in display_results
             if v.get("report_type", "CONFIRMED") in report_type_filter
+        ]
+    if relevance_filter:
+        # Compute percentile thresholds on the pre-filter set so labels are consistent
+        _vph_all = [v.get("views_per_hour", 0) for v in display_results if v.get("views_per_hour", 0) > 0]
+        if len(_vph_all) >= 2:
+            _s = sorted(_vph_all)
+            _n = len(_s)
+            _fp80, _fp50 = _s[int(_n * 0.80)], _s[int(_n * 0.50)]
+            def _pre_label(vph):
+                if not vph:
+                    return ""
+                if vph >= _fp80:
+                    return "Viral"
+                if vph >= _fp50:
+                    return "Rising"
+                return "Active"
+        else:
+            def _pre_label(vph):
+                return ""
+        display_results = [
+            v for v in display_results
+            if _pre_label(v.get("views_per_hour", 0)) in relevance_filter
         ]
 
     # Stats summary line
