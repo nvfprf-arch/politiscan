@@ -771,13 +771,24 @@ def _show_results():
             breakdown_line += "   \u2014   " + outlet_str
         st.caption(breakdown_line)
 
-    all_rows       = st.session_state.results_rows
+    all_rows        = st.session_state.results_rows
     total_political = len(all_rows)
-    selected_type = st.session_state.get("selected_report_types", "All Report Types")
+    selected_type   = st.session_state.get("selected_report_types", "All Report Types")
+    keyword         = st.session_state.get("keyword_filter", "").strip().lower()
+
+    def _keyword_match(r):
+        if not keyword:
+            return True
+        return (
+            keyword in (r.get("Headline", "") or "").lower()
+            or keyword in (r.get("Summary", "") or "").lower()
+        )
 
     filtered = all_rows
     if selected_type and selected_type != "All Report Types":
         filtered = [r for r in filtered if r.get("_report_type", "CONFIRMED") == selected_type]
+    if keyword:
+        filtered = [r for r in filtered if _keyword_match(r)]
 
     filtered = sorted(filtered, key=lambda r: r.get("_client_adjusted_score", r.get("Score", 0)), reverse=True)
     for i, r in enumerate(filtered, start=1):
@@ -789,6 +800,8 @@ def _show_results():
     shortlist = st.session_state.get("shortlist_articles", [])
     if selected_type and selected_type != "All Report Types":
         shortlist = [r for r in shortlist if r.get("_report_type", "CONFIRMED") == selected_type]
+    if keyword:
+        shortlist = [r for r in shortlist if _keyword_match(r)]
     shortlist_urls = {r.get("Link") for r in shortlist}
 
     st.subheader(f"AI Shortlist ({len(shortlist)} articles)")
@@ -994,6 +1007,12 @@ with st.sidebar:
             options=["All Report Types", "CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
         )
         st.session_state.selected_report_types = selected_report_type
+
+        keyword = st.text_input(
+            "Filter by Keyword",
+            placeholder="e.g. DK Shivakumar",
+        )
+        st.session_state.keyword_filter = keyword
 
         st.divider()
         with st.expander("Story Sources"):
