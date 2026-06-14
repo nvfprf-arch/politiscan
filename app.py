@@ -642,77 +642,67 @@ if not st.session_state.get("logged_in"):
         'nav[data-testid="stSidebarNav"], section[data-testid="stSidebar"] {display: none !important;}'
         # Dark page background
         '.stApp { background-color: #0a0a0a !important; }'
-        # Hide the default Streamlit top decoration
-        'header[data-testid="stHeader"] { background: transparent !important; }'
-        # Centre the login card
-        '.login-outer { display:flex; justify-content:center; align-items:center; min-height:85vh; padding:2rem; }'
-        # Card shell — cream paper, double border trick
-        '.login-card { background:#f4efe3; width:100%; max-width:420px; border:1.5px solid #1a1a1a; border-radius:2px; }'
-        '.login-card-inner { border:0.5px solid #b0a080; margin:5px; padding:2rem 1.75rem 1.5rem; }'
-        # Rules
+        'header[data-testid="stHeader"] { background-color: #0a0a0a !important; }'
+        # Main content block becomes the cream card
+        '[data-testid="stAppViewBlockContainer"] {'
+        '  background: #f4efe3 !important;'
+        '  border: 1.5px solid #1a1a1a !important;'
+        '  box-shadow: 0 0 0 5px #f4efe3, 0 0 0 6px #b0a080 !important;'
+        '  max-width: 600px !important;'
+        '  margin: 4vh auto !important;'
+        '  padding: 2rem 2.5rem 2rem !important;'
+        '  border-radius: 2px !important;'
+        '}'
+        # Force all text dark on the cream background
+        '[data-testid="stAppViewBlockContainer"] * { color: #1a1a1a !important; }'
+        # Newspaper typographic elements
         '.np-rule-thick { height:3px; background:#1a1a1a; margin-bottom:3px; }'
         '.np-rule-thin  { height:1px; background:#1a1a1a; margin-bottom:0.75rem; }'
-        # Masthead
         '.np-masthead { font-family:"Georgia","Times New Roman",serif; font-size:42px; font-weight:700;'
-        '  color:#1a1a1a; text-align:center; line-height:1; margin-bottom:0.5rem; letter-spacing:0.02em; }'
-        # Meta dateline
+        '  color:#1a1a1a !important; text-align:center; line-height:1; margin-bottom:0.5rem; }'
         '.np-meta { display:flex; align-items:center; gap:6px; margin-bottom:1rem; }'
         '.np-meta-rule { flex:1; height:0.5px; background:#b0a080; }'
         '.np-meta-text { font-family:"Georgia","Times New Roman",serif; font-size:9px;'
-        '  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a; white-space:nowrap; }'
-        # Double rule divider
+        '  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; white-space:nowrap; }'
         '.np-divider { border:none; border-top:2.5px double #1a1a1a; margin:0 0 1.25rem 0; }'
-        # Subheading
         '.np-subhead { font-family:"Georgia","Times New Roman",serif; font-size:12.5px;'
-        '  font-style:italic; color:#4a3e28; text-align:center; margin-bottom:1.5rem; }'
-        # Field label
+        '  font-style:italic; color:#4a3e28 !important; text-align:center; margin-bottom:1.5rem; }'
         '.np-label { font-family:"Georgia","Times New Roman",serif; font-size:9px;'
-        '  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a;'
-        '  display:block; margin-bottom:4px; }'
-        # Override Streamlit input styling inside the card
-        '.login-card .stTextInput input {'
-        '  background:transparent !important; border:none !important;'
-        '  border-bottom:1.5px solid #1a1a1a !important; border-radius:0 !important;'
-        '  font-family:"Georgia","Times New Roman",serif !important; font-size:14px !important;'
-        '  color:#1a1a1a !important; padding:6px 0 !important; box-shadow:none !important; }'
-        '.login-card .stTextInput input::placeholder { color:#b0a080 !important; font-style:italic; }'
-        # Override Streamlit primary button inside the card
-        '.login-card .stButton > button[kind="primary"] {'
-        '  width:100% !important; background:#1a1a1a !important; color:#f4efe3 !important;'
-        '  border:none !important; border-radius:0 !important; padding:11px 0 !important;'
-        '  font-family:"Georgia","Times New Roman",serif !important; font-size:10.5px !important;'
-        '  letter-spacing:0.18em !important; text-transform:uppercase !important; }'
-        '.login-card .stButton > button[kind="primary"]:hover { background:#3a3020 !important; }'
-        # Secondary button (Verify)
-        '.login-card .stButton > button[kind="secondary"] {'
-        '  width:100% !important; background:transparent !important; color:#1a1a1a !important;'
-        '  border:1.5px solid #1a1a1a !important; border-radius:0 !important; padding:10px 0 !important;'
-        '  font-family:"Georgia","Times New Roman",serif !important; font-size:10.5px !important;'
-        '  letter-spacing:0.18em !important; text-transform:uppercase !important; }'
-        '.login-card .stButton > button[kind="secondary"]:hover {'
-        '  background:#1a1a1a !important; color:#f4efe3 !important; }'
-        # Divider between email and OTP sections
+        '  letter-spacing:0.14em; text-transform:uppercase; color:#7a6a4a !important; display:block; margin-bottom:4px; }'
         '.np-section-divider { border:none; border-top:1px solid #c8b898; margin:1.25rem 0; }'
-        # OTP note
         '.np-otp-note { font-family:"Georgia","Times New Roman",serif; font-size:11.5px;'
-        '  font-style:italic; color:#7a6a4a; text-align:center; margin-bottom:1rem; }'
-        # Resend link styled as small italic text
-        '.np-resend { font-family:"Georgia","Times New Roman",serif; font-size:10px;'
-        '  font-style:italic; color:#7a6a4a; text-align:center; margin-top:0.5rem; }'
-        # Footer line
-        '.np-footer { font-family:"Georgia","Times New Roman",serif; font-size:8px;'
-        '  letter-spacing:0.1em; text-transform:uppercase; color:#b0a080;'
-        '  text-align:center; margin-top:1.5rem; padding-top:0.75rem; border-top:0.5px solid #c8b898; }'
-        # Error/success overrides to match card palette
-        '.login-card .stAlert { border-radius:0 !important; }'
+        '  font-style:italic; color:#7a6a4a !important; text-align:center; margin-bottom:1rem; }'
+        '.np-footer { font-family:"Georgia","Times New Roman",serif; font-size:8px; letter-spacing:0.1em;'
+        '  text-transform:uppercase; color:#b0a080 !important; text-align:center;'
+        '  margin-top:1.5rem; padding-top:0.75rem; border-top:0.5px solid #c8b898; }'
+        # Inputs — underline only, transparent bg
+        '[data-testid="stAppViewBlockContainer"] .stTextInput input {'
+        '  background: transparent !important; border: none !important;'
+        '  border-bottom: 1.5px solid #1a1a1a !important; border-radius: 0 !important;'
+        '  color: #1a1a1a !important; font-family:"Georgia","Times New Roman",serif !important;'
+        '  font-size: 14px !important; box-shadow: none !important; }'
+        '[data-testid="stAppViewBlockContainer"] .stTextInput input::placeholder {'
+        '  color: #b0a080 !important; font-style: italic; }'
+        # Primary button — solid black
+        '[data-testid="stAppViewBlockContainer"] button[kind="primary"] {'
+        '  background: #1a1a1a !important; color: #f4efe3 !important;'
+        '  border: none !important; border-radius: 0 !important;'
+        '  font-family:"Georgia","Times New Roman",serif !important;'
+        '  font-size: 10.5px !important; letter-spacing: 0.18em !important;'
+        '  text-transform: uppercase !important; width: 100% !important; }'
+        # Secondary button — outline
+        '[data-testid="stAppViewBlockContainer"] button[kind="secondary"] {'
+        '  background: transparent !important; color: #1a1a1a !important;'
+        '  border: 1.5px solid #1a1a1a !important; border-radius: 0 !important;'
+        '  font-family:"Georgia","Times New Roman",serif !important;'
+        '  font-size: 10.5px !important; letter-spacing: 0.18em !important;'
+        '  text-transform: uppercase !important; width: 100% !important; }'
         '</style>',
         unsafe_allow_html=True,
     )
 
     # Build the date string for the dateline
     today_str = datetime.now().strftime("%A, %-d %B %Y")
-
-    st.markdown('<div class="login-outer"><div class="login-card"><div class="login-card-inner">', unsafe_allow_html=True)
 
     # Masthead block
     st.markdown(f'''
@@ -783,8 +773,6 @@ if not st.session_state.get("logged_in"):
 
     st.markdown('<div class="np-footer">For authorised personnel only &middot; PolitiScan Intelligence</div>',
                 unsafe_allow_html=True)
-    st.markdown('</div></div></div>', unsafe_allow_html=True)
-
     st.stop()
 
 # ---------------------------------------------------------------------------
