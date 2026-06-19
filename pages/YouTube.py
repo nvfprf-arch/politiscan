@@ -89,13 +89,6 @@ def _get_channel_ids(language, selected_channels):
 # ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="YouTube Intelligence Monitor", layout="wide")
-st.markdown(
-    """<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="13" cy="13" r="9" fill="none" stroke="#D85A30" stroke-width="2.5"/><line x1="19.5" y1="19.5" x2="29" y2="29" stroke="#D85A30" stroke-width="2.5" stroke-linecap="round"/></svg>
-<span style="font-size:20px;font-weight:700;color:#1A1A1A;letter-spacing:1px;">POLITISCAN</span>
-</div>""",
-    unsafe_allow_html=True,
-)
 st.title("YouTube Intelligence Monitor")
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
