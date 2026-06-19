@@ -11,6 +11,12 @@ def apply_newspaper_theme():
     st.markdown(
         """
         <style>
+        /* 0. Reduce default top padding above page headings */
+        .main .block-container,
+        [data-testid="stMain"] .block-container {
+            padding-top: 1rem !important;
+        }
+
         /* 1. Cream background — main area and sidebar */
         .stApp,
         [data-testid="stAppViewContainer"],
