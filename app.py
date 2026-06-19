@@ -703,7 +703,7 @@ section[data-testid="stSidebar"], header[data-testid="stHeader"] { display: none
 
 /* Inputs */
 .block-container .stTextInput input {
-    color: #ffffff !important;
+    color: #1A1A1A !important;
     font-family: "Georgia","Times New Roman",serif !important;
     font-size: 14px !important;
 }
