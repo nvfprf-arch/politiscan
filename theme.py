@@ -85,6 +85,59 @@ def apply_newspaper_theme():
         [data-testid="stSidebar"] [data-testid="baseButton-secondary"] span {
             color: #F4F1E8 !important;
         }
+
+        /* ── Sidebar page navigation ── */
+        [data-testid="stSidebarNav"] {
+            border-top: 1px solid #1A1A1A !important;
+            border-bottom: 1px solid #1A1A1A !important;
+            padding: 6px 0 !important;
+        }
+
+        /* All nav link spans: uppercase, spaced, 15px */
+        [data-testid="stSidebarNavLink"] span {
+            font-size: 15px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 1px !important;
+        }
+
+        /* Active page */
+        [data-testid="stSidebarNavLink"][aria-current="page"] span {
+            font-weight: 700 !important;
+            color: #1A1A1A !important;
+        }
+
+        /* Inactive pages */
+        [data-testid="stSidebarNavLink"]:not([aria-current="page"]) span {
+            font-weight: 400 !important;
+            color: #6B6B63 !important;
+        }
+
+        /* ── Rename nav labels (display only) ──
+           Hide the original span text with font-size:0 so the element still
+           carries active/inactive color and weight, which ::before inherits. */
+        [data-testid="stSidebarNavLink"][href="/"] span,
+        [data-testid="stSidebarNavLink"][href="/app"] span {
+            font-size: 0 !important;
+        }
+        [data-testid="stSidebarNavLink"][href="/"] span::before,
+        [data-testid="stSidebarNavLink"][href="/app"] span::before {
+            content: "NEWS DESK";
+            font-size: 15px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        [data-testid="stSidebarNavLink"][href="/YouTube"] span,
+        [data-testid="stSidebarNavLink"][href="/YouTube/"] span {
+            font-size: 0 !important;
+        }
+        [data-testid="stSidebarNavLink"][href="/YouTube"] span::before,
+        [data-testid="stSidebarNavLink"][href="/YouTube/"] span::before {
+            content: "YOUTUBE MONITOR";
+            font-size: 15px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
         </style>
         """,
         unsafe_allow_html=True,
