@@ -22,9 +22,11 @@ def apply_newspaper_theme():
             background-color: #F4F1E8 !important;
         }
 
-        /* 2. Text color — applied to real text-bearing tags only */
+        /* 2. Text color — applied to real text-bearing tags only.
+              th is intentionally excluded so table headers with dark
+              backgrounds keep their own explicit color (e.g. white). */
         h1, h2, h3, h4, h5, h6,
-        p, label, li, td, th,
+        p, label, li, td,
         input, textarea {
             color: #1A1A1A !important;
         }

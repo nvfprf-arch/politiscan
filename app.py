@@ -845,7 +845,7 @@ _BADGE_CSS = {
     "SPECULATIVE": "background:#7d4e00;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
     "ANALYTICAL":  "background:#1a3a5c;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
 }
-_TH = "padding:6px 10px;text-align:left;border-bottom:1px solid #444;white-space:nowrap;"
+_TH = "padding:6px 10px;text-align:left;border-bottom:1px solid #444;white-space:nowrap;color:#FFFFFF !important;"
 _TD = "padding:6px 10px;vertical-align:top;"
 
 
