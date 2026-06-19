@@ -63,7 +63,10 @@ def apply_newspaper_theme():
         }
 
         /* ── Sidebar account / logout button ──
-           Scan buttons use type="primary" so they are unaffected by this rule. */
+           Scan buttons use type="primary" so they are unaffected by this rule.
+           The `p` sub-rule is required because Streamlit renders button text
+           inside a <p>, which the broad `p { color: #1A1A1A }` rule would
+           otherwise override. */
         [data-testid="stSidebar"] button[kind="secondary"],
         [data-testid="stSidebar"] [data-testid="baseButton-secondary"] {
             width: 100% !important;
@@ -75,6 +78,12 @@ def apply_newspaper_theme():
             border: 1px solid #1A1A1A !important;
             padding: 10px !important;
             border-radius: 0 !important;
+        }
+        [data-testid="stSidebar"] button[kind="secondary"] p,
+        [data-testid="stSidebar"] button[kind="secondary"] span,
+        [data-testid="stSidebar"] [data-testid="baseButton-secondary"] p,
+        [data-testid="stSidebar"] [data-testid="baseButton-secondary"] span {
+            color: #F4F1E8 !important;
         }
         </style>
         """,
