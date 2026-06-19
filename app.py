@@ -1046,11 +1046,13 @@ def _show_results():
 
 with st.sidebar:
     st.markdown(
-        f'<p style="font-size:0.75rem;font-style:italic;color:#888;margin:0 0 2px 0;line-height:1.3;">'
-        f'{st.session_state.user_email}</p>',
+        f"""<div style="border:1px solid #1A1A1A;padding:12px;margin-bottom:4px;">
+<p style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#6B6B63;margin:0 0 6px 0;">Signed in as</p>
+<p style="font-size:16px;font-weight:700;color:#1A1A1A;margin:0 0 12px 0;">{st.session_state.user_email}</p>
+</div>""",
         unsafe_allow_html=True,
     )
-    if st.button("⎋ logout", key="sidebar_logout", use_container_width=False):
+    if st.button("LOGOUT", key="sidebar_logout", use_container_width=True):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()

@@ -61,6 +61,21 @@ def apply_newspaper_theme():
         thead th, [data-testid="stDataFrameResizable"] th, [data-testid="stTable"] th, .stDataFrame th, table th {
           color: #FFFFFF !important;
         }
+
+        /* ── Sidebar account / logout button ──
+           Scan buttons use type="primary" so they are unaffected by this rule. */
+        [data-testid="stSidebar"] button[kind="secondary"],
+        [data-testid="stSidebar"] [data-testid="baseButton-secondary"] {
+            width: 100% !important;
+            font-size: 14px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
+            background: #1A1A1A !important;
+            color: #F4F1E8 !important;
+            border: 1px solid #1A1A1A !important;
+            padding: 10px !important;
+            border-radius: 0 !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
