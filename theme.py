@@ -57,6 +57,10 @@ def apply_newspaper_theme():
         [data-baseweb="input"] > div {
             border: none !important;
         }
+
+        thead th, [data-testid="stDataFrameResizable"] th, [data-testid="stTable"] th, .stDataFrame th, table th {
+          color: #FFFFFF !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,

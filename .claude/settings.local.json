@@ -23,7 +23,17 @@
       "Bash(git checkout:*)",
       "Bash(pip show:*)",
       "Bash(python3 -c \"import streamlit; print\\(streamlit.__version__\\)\")",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(find /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit -name *multiselect* -o -name *Multiselect*)",
+      "Bash(grep -o class=[^]*tag[^]* /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/*.js)",
+      "Bash(find /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit -type f \\\\\\(-name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js \\\\\\))",
+      "Bash(grep -ao [a-zA-Z_-]*tag[a-zA-Z_-]* /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/5791.9a42fb4b.chunk.js)",
+      "Bash(grep -ao data-testid[^}]*[Mm]ulti[Ss]elect[^}]* /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/main.1661a802.js)",
+      "Bash(grep -ao data-testid[^}]* /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/1074.71719df6.chunk.js)",
+      "Bash(grep -ao \"keyboard_double_arrow\\\\|material.symbols\\\\|stSidebar.*Control\\\\|collapsedControl.*icon\" /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/*.js)",
+      "Bash(grep -ao data-testid:collapsedControl[^}]* /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/main.1661a802.js)",
+      "Bash(grep -o \"keyboard_double_arrow[^]*\\\\|material.symbols[^]*\\\\|material.*symbol\" /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/*.js)",
+      "Bash(C:/Users/ARUNDHATI/anaconda3/python.exe -c \"import streamlit; print\\(streamlit.__version__\\)\")"
     ]
   }
 }
