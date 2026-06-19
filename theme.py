@@ -11,21 +11,7 @@ def apply_newspaper_theme():
     st.markdown(
         """
         <style>
-        /* 0a. Reorder sidebar sections so user content (logo header) appears
-               above the built-in page nav, which Streamlit always renders first
-               in the DOM regardless of Python code order. */
-        [data-testid="stSidebar"] > div:first-child {
-            display: flex !important;
-            flex-direction: column !important;
-        }
-        [data-testid="stSidebarNav"] {
-            order: 2 !important;
-        }
-        [data-testid="stSidebarUserContent"] {
-            order: 1 !important;
-        }
-
-        /* 0b. Reduce default top padding above page headings */
+        /* 0. Reduce default top padding above page headings */
         .main .block-container,
         [data-testid="stMain"] .block-container {
             padding-top: 1rem !important;
