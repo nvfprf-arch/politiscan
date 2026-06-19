@@ -30,7 +30,7 @@ load_dotenv()
 
 from theme import apply_newspaper_theme
 apply_newspaper_theme()
-st.markdown("<style>[data-testid='stSidebarContent'] { display: flex; flex-direction: column; } [data-testid='stSidebarNav'] { order: 2; } [data-testid='stSidebarUserContent'] { order: 1; }</style>", unsafe_allow_html=True)
+st.markdown("<style>[data-testid='stSidebarContent'] { display: flex; flex-direction: column; } [data-testid='stSidebarNav'] { order: 2; } [data-testid='stSidebarUserContent'] { order: 3; }</style>", unsafe_allow_html=True)
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
