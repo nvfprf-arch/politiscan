@@ -41,16 +41,20 @@ def apply_newspaper_theme():
             color: #1A1A1A !important;
         }
 
-        /* Explicitly restore Material Symbols / Material Icons to their own font */
-        .material-symbols-rounded,
-        .material-symbols-outlined,
-        .material-symbols-sharp,
-        .material-icons,
-        [class*="material-symbols"],
-        [class*="material-icons"] {
-            font-family: 'Material Symbols Rounded', 'Material Symbols Outlined',
-                         'Material Icons', sans-serif !important;
-            color: inherit;
+        /* ── Restore Material Symbols icon font — placed AFTER the broad serif rule
+           so it wins via source order and the sidebar collapse arrow renders as
+           a glyph, not literal text. ── */
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined' !important;
+        }
+        .material-symbols-rounded {
+            font-family: 'Material Symbols Rounded' !important;
+        }
+        .material-symbols-sharp {
+            font-family: 'Material Symbols Sharp' !important;
+        }
+        .material-icons {
+            font-family: 'Material Icons' !important;
         }
 
         /* ── Headings ── */
@@ -89,7 +93,7 @@ def apply_newspaper_theme():
         [data-baseweb="tag"] {
             width: auto !important;
             max-width: none !important;
-            min-width: 0 !important;
+            min-width: fit-content !important;
             overflow: visible !important;
             white-space: nowrap !important;
             padding-left: 10px !important;
@@ -100,7 +104,6 @@ def apply_newspaper_theme():
             overflow: visible !important;
             text-overflow: unset !important;
             white-space: nowrap !important;
-            padding-left: 2px !important;
         }
 
         /* ── Dataframe / table cells ── */
