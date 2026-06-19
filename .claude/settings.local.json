@@ -17,7 +17,13 @@
       "WebFetch(domain:www.noxinfluencer.com)",
       "WebFetch(domain:www.tunepocket.com)",
       "WebFetch(domain:hypeauditor.com)",
-      "Bash(git revert:*)"
+      "Bash(git revert:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git checkout:*)",
+      "Bash(pip show:*)",
+      "Bash(python3 -c \"import streamlit; print\\(streamlit.__version__\\)\")",
+      "Bash(git mv:*)"
     ]
   }
 }

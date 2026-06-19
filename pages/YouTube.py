@@ -28,6 +28,9 @@ from ranker import rank_videos
 
 load_dotenv()
 
+from theme import apply_newspaper_theme
+apply_newspaper_theme()
+
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 

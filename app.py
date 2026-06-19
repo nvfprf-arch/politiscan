@@ -13,6 +13,8 @@ from io import BytesIO
 from dotenv import load_dotenv
 load_dotenv()
 
+from theme import apply_newspaper_theme
+
 # SET TO FALSE BEFORE DEPLOYING
 DEV_MODE = False
 
@@ -625,6 +627,7 @@ def _truncate_signals(signals: list, max_len: int = 80) -> str:
 # ---------------------------------------------------------------------------
 
 st.set_page_config(page_title="PolitiScan", page_icon="\U0001f5f3\ufe0f", layout="wide")
+apply_newspaper_theme()
 
 # ---------------------------------------------------------------------------
 # Login gate
