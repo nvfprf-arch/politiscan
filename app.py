@@ -636,6 +636,7 @@ def _truncate_signals(signals: list, max_len: int = 80) -> str:
 
 st.set_page_config(page_title="PolitiScan", page_icon="\U0001f5f3\ufe0f", layout="wide")
 apply_newspaper_theme()
+st.markdown("<style>[data-testid='stSidebarContent'] { display: flex; flex-direction: column; } [data-testid='stSidebarNav'] { order: 2; } [data-testid='stSidebarUserContent'] { order: 1; }</style>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Login gate
