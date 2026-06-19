@@ -1103,12 +1103,19 @@ with st.sidebar:
 
         st.divider()
         with st.expander("Story Sources"):
+            shortlist = st.session_state.get("shortlist_articles", [])
+            shortlist_links = {a.get("Link", "") for a in shortlist if a.get("Link")}
+            shortlist_headlines = {a.get("Headline", "") for a in shortlist if a.get("Headline")}
             multi_source_rows = [
                 r for r in st.session_state.results_rows
                 if r.get("_source_count", 1) >= 2
+                and (
+                    r.get("Link", "") in shortlist_links
+                    or r.get("Headline", "") in shortlist_headlines
+                )
             ]
             if not multi_source_rows:
-                st.caption("No stories with multiple sources found.")
+                st.caption("No shortlisted stories with multiple sources found.")
             else:
                 headlines = [r.get("Headline", f"Story {i+1}") for i, r in enumerate(multi_source_rows)]
                 selected_hl = st.selectbox("Select story", headlines, label_visibility="collapsed")
