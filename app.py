@@ -488,7 +488,8 @@ def generate_pdf(articles: list, region_label: str) -> bytes:
 
         try:
             pdf.set_font("Helvetica", "I", 9)
-            pdf.cell(w=W, h=5, text=source_line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(w=W, h=5, text=source_line, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         except Exception:
             pass
 
@@ -497,20 +498,23 @@ def generate_pdf(articles: list, region_label: str) -> bytes:
             if raw_sigs:
                 try:
                     pdf.set_font("Helvetica", "I", 8)
+                    pdf.set_x(pdf.l_margin)
                     pdf.cell(w=W, h=4, text=safe(f"    Signals: {raw_sigs}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 except Exception:
                     pass
 
         try:
             pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(w=W, h=5, text=summary)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(w=W, h=5, text=summary, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         except Exception:
             pass
 
         try:
             pdf.set_font("Helvetica", "", 8)
             pdf.set_text_color(0, 0, 180)
-            pdf.multi_cell(w=W, h=4, text=url)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(w=W, h=4, text=url, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_text_color(0, 0, 0)
         except Exception:
             pdf.set_text_color(0, 0, 0)
@@ -585,26 +589,30 @@ def generate_pdf_shortlist(articles: list, region_label: str, email: str) -> byt
 
         try:
             pdf.set_font("Helvetica", "B", 10)
-            pdf.multi_cell(w=W, h=6, text=headline)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(w=W, h=6, text=headline, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         except Exception:
             pass
 
         try:
             pdf.set_font("Helvetica", "I", 9)
-            pdf.cell(w=W, h=5, text=safe(f"Source: {outlet}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(w=W, h=5, text=safe(f"Source: {outlet}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         except Exception:
             pass
 
         try:
             pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(w=W, h=5, text=summary)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(w=W, h=5, text=summary, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         except Exception:
             pass
 
         try:
             pdf.set_font("Helvetica", "", 8)
             pdf.set_text_color(0, 0, 180)
-            pdf.multi_cell(w=W, h=4, text=url)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(w=W, h=4, text=url, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_text_color(0, 0, 0)
         except Exception:
             pdf.set_text_color(0, 0, 0)
