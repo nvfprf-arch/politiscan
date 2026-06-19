@@ -636,7 +636,6 @@ def _truncate_signals(signals: list, max_len: int = 80) -> str:
 
 st.set_page_config(page_title="PolitiScan", page_icon="\U0001f5f3\ufe0f", layout="wide")
 apply_newspaper_theme()
-st.markdown("<style>[data-testid='stSidebarContent'] { display: flex; flex-direction: column; } [data-testid='stSidebarNav'] { order: 2; } [data-testid='stSidebarUserContent'] { order: 3; }</style>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Login gate
@@ -826,6 +825,13 @@ section[data-testid="stSidebarNav"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown(
+    """<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="13" cy="13" r="9" fill="none" stroke="#D85A30" stroke-width="2.5"/><line x1="19.5" y1="19.5" x2="29" y2="29" stroke="#D85A30" stroke-width="2.5" stroke-linecap="round"/></svg>
+<span style="font-size:20px;font-weight:700;color:#1A1A1A;letter-spacing:1px;">POLITISCAN</span>
+</div>""",
+    unsafe_allow_html=True,
+)
 st.title("Political Intelligence Dashboard")
 
 # Load/refresh client profile once per session
@@ -1053,14 +1059,6 @@ def _show_results():
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown(
-        """<div style="display:flex;align-items:center;gap:10px;padding:12px 0 8px 0;">
-<svg width="28" height="28" viewBox="0 0 32 32"><circle cx="13" cy="13" r="9" fill="none" stroke="#D85A30" stroke-width="2.5"/><line x1="19.5" y1="19.5" x2="29" y2="29" stroke="#D85A30" stroke-width="2.5" stroke-linecap="round"/></svg>
-<span style="font-size:20px;font-weight:700;color:#1A1A1A;letter-spacing:1px;">POLITISCAN</span>
-</div>""",
-        unsafe_allow_html=True,
-    )
-    st.divider()
     st.markdown(
         f"""<div style="border:1px solid #1A1A1A;padding:12px;margin-bottom:4px;">
 <p style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#6B6B63;margin:0 0 6px 0;">Signed in as</p>
