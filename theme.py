@@ -127,7 +127,7 @@ def apply_newspaper_theme():
         }
         [data-testid="stSidebarNavLink"][href="/"] span::before,
         [data-testid="stSidebarNavLink"][href="/app"] span::before {
-            content: "NEWS DESK";
+            content: "NEWS";
             font-size: 15px;
             letter-spacing: 1px;
             text-transform: uppercase;
