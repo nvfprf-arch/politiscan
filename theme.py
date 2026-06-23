@@ -118,33 +118,28 @@ def apply_newspaper_theme():
             color: #6B6B63 !important;
         }
 
-        /* ── Rename nav labels (display only) ──
-           Hide the original span text with font-size:0 so the element still
-           carries active/inactive color and weight, which ::before inherits. */
-        [data-testid="stSidebarNavLink"][href="/"] span,
-        [data-testid="stSidebarNavLink"][href="/app"] span {
-            font-size: 0 !important;
-        }
-        [data-testid="stSidebarNavLink"][href="/"] span::before,
-        [data-testid="stSidebarNavLink"][href="/app"] span::before {
-            content: "NEWS";
-            font-size: 15px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        [data-testid="stSidebarNavLink"][href="/YouTube"] span,
-        [data-testid="stSidebarNavLink"][href="/YouTube/"] span {
-            font-size: 0 !important;
-        }
-        [data-testid="stSidebarNavLink"][href="/YouTube"] span::before,
-        [data-testid="stSidebarNavLink"][href="/YouTube/"] span::before {
-            content: "YOUTUBE MONITOR";
-            font-size: 15px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
         </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Rename sidebar nav labels via JS — more reliable than href-based CSS selectors
+    # since the deployed href can vary. Runs once on load and watches for DOM changes.
+    st.markdown(
+        """
+        <script>
+        (function() {
+            const LABELS = { "app": "News", "youtube": "YouTube Monitor" };
+            function renameLinks() {
+                document.querySelectorAll('[data-testid="stSidebarNavLink"] span').forEach(function(span) {
+                    var txt = span.textContent.trim().toLowerCase();
+                    if (LABELS[txt]) { span.textContent = LABELS[txt]; }
+                });
+            }
+            renameLinks();
+            new MutationObserver(renameLinks).observe(document.body, { childList: true, subtree: true });
+        })();
+        </script>
         """,
         unsafe_allow_html=True,
     )
