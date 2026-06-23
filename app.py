@@ -973,31 +973,53 @@ def _show_results():
                     return v[len("What happened: "):]
                 return v
 
+            def _safe_str(v):
+                """Coerce any value to a plain str, flattening lists/sets."""
+                if v is None:
+                    return ""
+                if isinstance(v, (list, tuple)):
+                    return ", ".join(str(i) for i in v)
+                if isinstance(v, set):
+                    return ", ".join(str(i) for i in sorted(v))
+                return str(v)
+
             editor_rows = [
                 {
                     "Add?":        False,
-                    "Rank":        row.get("Rank", ""),
-                    "Score":       row.get("Score", ""),
-                    "Report Type": row.get("Report Type", ""),
-                    "Headline":    row.get("Headline", ""),
-                    "Summary":     _strip_prefix(row.get("Summary", "") or ""),
-                    "Sources":     row.get("Sources", ""),
+                    "Rank":        int(row.get("Rank") or 0),
+                    "Score":       float(row.get("Score") or 0.0),
+                    "Report Type": _safe_str(row.get("Report Type")),
+                    "Headline":    _safe_str(row.get("Headline")),
+                    "Summary":     _safe_str(_strip_prefix(row.get("Summary") or "")),
+                    "Sources":     _safe_str(row.get("Sources")),
                 }
                 for row in non_shortlist
             ]
             edit_df = pd.DataFrame(editor_rows)[["Add?"] + _editor_cols]
-            edited = st.data_editor(
-                edit_df,
-                hide_index=True,
-                use_container_width=True,
-                column_config={
-                    "Add?":        st.column_config.CheckboxColumn("Add?", default=False),
-                    "Score":       st.column_config.NumberColumn("Score", format="%.1f"),
-                    "Headline":    st.column_config.TextColumn("Headline", width="large"),
-                    "Summary":     st.column_config.TextColumn("Summary",  width="large"),
-                },
-                key="all_articles_editor",
-            )
+
+            try:
+                edited = st.data_editor(
+                    edit_df,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "Add?":        st.column_config.CheckboxColumn("Add?", default=False),
+                        "Score":       st.column_config.NumberColumn("Score", format="%.1f"),
+                        "Headline":    st.column_config.TextColumn("Headline", width="large"),
+                        "Summary":     st.column_config.TextColumn("Summary",  width="large"),
+                    },
+                    key="all_articles_editor",
+                )
+            except Exception:
+                # Fallback: render each article as an expander card
+                edited = edit_df.copy()
+                for i, row in enumerate(non_shortlist):
+                    label = _safe_str(row.get("Headline")) or f"Article {i + 1}"
+                    with st.expander(label):
+                        st.caption(f"Score: {float(row.get('Score') or 0):.1f}  |  {_safe_str(row.get('Report Type'))}  |  {_safe_str(row.get('Sources'))}")
+                        st.write(_safe_str(_strip_prefix(row.get("Summary") or "")))
+                        checked = st.checkbox("Add to Shortlist", key=f"fallback_add_{i}")
+                        edited.at[i, "Add?"] = checked
 
             if st.button("Add to Shortlist", key="add_shortlist_btn"):
                 selected_indices = edited.loc[edited["Add?"] == True].index.tolist()
