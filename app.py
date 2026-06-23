@@ -1188,7 +1188,11 @@ if scan_clicked:
                 _key = ""
             if not _key:
                 _key = os.getenv("NEWSDATA_API_KEY", "").strip()
-            nd_result[0] = fetch_newsdata_primary(district, state, _key)
+            if active_outlets:
+                _domains = [d for d in (OUTLET_DOMAINS.get(o) for o in active_outlets) if d]
+                nd_result[0] = fetch_newsdata_articles(district, state, _domains, _key) if _domains else []
+            else:
+                nd_result[0] = fetch_newsdata_primary(district, state, _key)
         except Exception as _e:
             print(f"[NewsData Thread Error] {_e}", file=sys.stderr)
             nd_result[0] = []
@@ -1206,14 +1210,44 @@ if scan_clicked:
     recent, _  = filter_recent(raw_entries, hours=36)
     unique_rss = deduplicate(recent, threshold=0.70)
     rss_dicts  = entries_to_dicts(unique_rss, channel="rss")
-    rss_total  = len(rss_dicts)
+    rss_total_raw = len(rss_dicts)
+
+    # Filter RSS results by selected outlets (source name or domain match)
+    if active_outlets:
+        _outlet_names_lower = [o.lower() for o in active_outlets]
+        _outlet_domains_map = {o: (OUTLET_DOMAINS.get(o) or "").lower() for o in active_outlets}
+
+        def _rss_matches_outlet(art):
+            src = (art.get("source_name") or "").lower()
+            url_host = ""
+            try:
+                url_host = urllib.parse.urlparse(art.get("url") or "").netloc.lower()
+            except Exception:
+                pass
+            for name in _outlet_names_lower:
+                if name in src or src in name:
+                    return True
+            for domain in _outlet_domains_map.values():
+                if domain and domain in url_host:
+                    return True
+            return False
+
+        rss_dicts = [a for a in rss_dicts if _rss_matches_outlet(a)]
+
+    rss_total = len(rss_dicts)
 
     unique_nd     = deduplicate_dicts(newsdata_dicts, threshold=0.70)
     nd_count      = len(unique_nd)
-    total_fetched = rss_total + nd_count
+    total_fetched = rss_total_raw + nd_count   # pre-filter total for display
     article_dicts = rss_dicts + unique_nd
 
-    if not article_dicts:
+    if not article_dicts and active_outlets:
+        st.warning(
+            "No articles found matching selected outlets. "
+            "The selected outlets may not have published on this topic in the last 36 hours. "
+            "Try selecting All Outlets."
+        )
+    elif not article_dicts:
         st.warning("No recent articles found for the selected region. Try a different district or check back later.")
     else:
         outlet_counts = Counter(
@@ -1338,10 +1372,13 @@ if scan_clicked:
         ][:15]
 
         dupes_merged = pre_dedup_count - post_dedup_count
+        if active_outlets:
+            filter_note = f"  {rss_total} articles shown (filtered from {total_fetched} total fetched)."
+        else:
+            filter_note = f"  {total_fetched} articles total - {nd_count} from NewsData.io, {rss_total} from Google RSS."
         caption = (
             f"**{len(rows)} unique stories** from **{len(ranked)} political articles**{scope_note}.  "
-            f"{dupes_merged} duplicates merged.  "
-            f"{total_fetched} articles total - {nd_count} from NewsData.io, {rss_total} from Google RSS."
+            f"{dupes_merged} duplicates merged.{filter_note}"
         )
 
         st.session_state.results_rows    = rows
