@@ -1471,15 +1471,11 @@ if scan_clicked:
             passes_thresh = "YES" if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD else "no"
             print(f"  {r['Rank']:<3} {r['_client_adjusted_score']:<6.2f} {passes_thresh:<5} {region_label:<14} {r['Headline'][:55]:<55}  {loc_text}")
 
-        # Shortlist: always up to 15 articles.
-        # Primary: articles scoring >= SHORTLIST_THRESHOLD (already region-filtered by rank_articles).
-        # Fallback: top-ranked articles fill remaining slots so the shortlist is never empty
-        #           when valid ranked results exist.
-        _above  = [r for r in rows if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD][:15]
-        if len(_above) < 15:
-            _seen_links = {r.get("Link") for r in _above}
-            _fill = [r for r in rows if r.get("Link") not in _seen_links]
-            _shortlist = (_above + _fill)[:15]
+        # Shortlist: articles scoring >= 7.0, OR top 10 if fewer than 5 clear the threshold.
+        # Everything else stays in "not in shortlist" for the user to review and promote.
+        _above = [r for r in rows if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD]
+        if len(_above) < 5:
+            _shortlist = rows[:10]
         else:
             _shortlist = _above
         st.session_state.shortlist_articles = _shortlist
@@ -1499,7 +1495,7 @@ if scan_clicked:
         print(f"  After outlet filter (pre-dedup):   {pre_dedup_count}  (rss={rss_total}, nd={nd_count})")
         print(f"  After deduplication:               {post_dedup_count}  ({dupes_merged} duplicates merged)")
         print(f"  After ranking (political filter):  {len(ranked)}")
-        print(f"  Shortlist (>= {SHORTLIST_THRESHOLD} + fill-to-15): {len(st.session_state.shortlist_articles)}")
+        print(f"  Shortlist (>= {SHORTLIST_THRESHOLD} or top-10 fallback): {len(st.session_state.shortlist_articles)}")
 
         if active_outlets:
             filter_note = f"  {pre_dedup_count} articles after outlet filter (from {total_fetched} total fetched)."
