@@ -23,11 +23,18 @@ _ALL_INDIAN_REGIONS = {
     "delhi", "jammu and kashmir", "ladakh", "lakshadweep", "puducherry",
 }
 
-# Geographic relevance scoring controls.
-# Articles where affects_client_region=False have their final_score multiplied by this factor.
-OUT_OF_REGION_PENALTY = 0.6
-# After ranking, articles with affects_client_region=False AND score below this threshold
-# are dropped entirely (major national stories above the threshold are still surfaced).
+# Region-tier score multipliers applied to final_score.
+# Tiers are determined deterministically from article text — LLM judgment is overridden.
+_REGION_MULT = {
+    "district": 1.0,   # article explicitly names the selected district → no penalty
+    "state":    0.75,  # mentions state only, no specific district → mild reduction
+    "other":    0.25,  # explicitly names a DIFFERENT Indian state → heavy penalty
+    "none":     0.35,  # no recognisable location in text → moderate penalty
+}
+_DISTRICT_HEADLINE_BOOST = 1.3   # multiplied in when district appears in the headline
+
+# Hard filter: articles with affects_client_region=False AND adjusted score below this
+# are dropped entirely so they never reach the shortlist.
 OUT_OF_REGION_SCORE_THRESHOLD = 6.0
 
 
@@ -90,24 +97,33 @@ def _process_article(article: dict, state: str, district: str, api_key: str) -> 
     # Step 2 — importance score
     imp = score_importance(headline, snippet, source_name, published, state, district, api_key)
 
-    # Step 2b — deterministic region override (safety net independent of LLM judgment).
-    # If the article text names any other Indian state/UT and does NOT mention the
-    # target state or district at all, force affects_client_region to False.
-    _text_lower   = (headline + " " + snippet).lower()
-    _state_lower  = state.lower()
-    _dist_lower   = district.lower()
-    _target_in_text = _state_lower in _text_lower or _dist_lower in _text_lower
-    _other_states = _ALL_INDIAN_REGIONS - {_state_lower}
-    _other_found  = next((s for s in _other_states if s in _text_lower), None)
-    if _other_found and not _target_in_text:
-        if imp["affects_client_region"]:
-            print(f"  [REGION OVERRIDE] Claude=True → forced False  "
-                  f"('{_other_found}' in text, '{state}/{district}' not in text)  "
-                  f"{headline[:65]}")
-        imp = {**imp, "affects_client_region": False}
-    elif not _target_in_text and imp["affects_client_region"]:
-        # No other state name found but target also absent — log for visibility
-        print(f"  [REGION WARN] Claude=True but '{state}/{district}' not found in text  {headline[:65]}")
+    # Step 2b — deterministic 4-tier region classification (overrides LLM judgment).
+    # Priority: district match > state match > other-state found > no location.
+    _text_lower  = (headline + " " + snippet).lower()
+    _hl_lower    = headline.lower()
+    _state_lower = state.lower()
+    _dist_lower  = district.lower()
+
+    if _dist_lower and _dist_lower in _text_lower:
+        region_tier = "district"
+        _acr        = True
+    elif _state_lower and _state_lower in _text_lower:
+        region_tier = "state"
+        _acr        = True
+    else:
+        _other_states = _ALL_INDIAN_REGIONS - {_state_lower}
+        _other_found  = next((s for s in _other_states if s in _text_lower), None)
+        if _other_found:
+            region_tier = "other"
+            _acr        = False
+        else:
+            region_tier = "none"
+            _acr        = False
+
+    if _acr != imp["affects_client_region"]:
+        print(f"  [REGION OVERRIDE] Claude={imp['affects_client_region']} → "
+              f"det={_acr} tier={region_tier}  {headline[:65]}")
+    imp = {**imp, "affects_client_region": _acr}
 
     # Step 3 — source tier & score
     tier         = get_source_tier(source_name)
@@ -124,13 +140,20 @@ def _process_article(article: dict, state: str, district: str, api_key: str) -> 
         2,
     )
 
-    # Step 6 — geographic relevance penalty for out-of-region articles
-    pre_penalty = final_score
-    if not imp["affects_client_region"]:
-        final_score = round(final_score * OUT_OF_REGION_PENALTY, 2)
+    # Step 6 — district headline boost + region-tier multiplier
+    pre_adjust       = final_score
+    _district_in_hl  = bool(_dist_lower and _dist_lower in _hl_lower)
 
-    region_tag = "IN-REGION" if imp["affects_client_region"] else "OUT-OF-REGION"
-    print(f"  [score] {region_tag:<14} pre={pre_penalty:.2f} post={final_score:.2f}  {headline[:65]}")
+    if _district_in_hl:
+        final_score = round(final_score * _DISTRICT_HEADLINE_BOOST, 2)
+
+    mult        = _REGION_MULT[region_tier]
+    final_score = round(final_score * mult, 2)
+
+    print(f"  [REGION DEBUG] tier={region_tier:<8} "
+          f"hl_boost={'YES' if _district_in_hl else 'no '} "
+          f"mult={mult}  pre={pre_adjust:.2f} post={final_score:.2f}  "
+          f"{headline[:40]}")
 
     # Step 7 — assemble
     return {
@@ -141,6 +164,7 @@ def _process_article(article: dict, state: str, district: str, api_key: str) -> 
         "primary_tag":           imp["primary_tag"],
         "one_line_reason":       imp["one_line_reason"],
         "affects_client_region": imp["affects_client_region"],
+        "region_tier":           region_tier,
         "report_type":           imp["report_type"],
         "speculation_signals":   imp["speculation_signals"],
         "type_confidence":       imp["type_confidence"],
@@ -165,6 +189,8 @@ def rank_articles(
 
     Returns articles that are POLITICAL, sorted by final_score descending.
     """
+    print(f"\n[RANKER ENTRY] rank_articles called — state={state!r}  district={district!r}  articles={len(articles_list)}")
+
     results = []
     processed = 0
 

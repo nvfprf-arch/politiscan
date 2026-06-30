@@ -166,12 +166,32 @@ def deduplicate(entries: list, threshold: float = 0.70) -> list:
 
 
 def get_outlet(entry) -> str:
-    """Extract news outlet name from feed entry source or link."""
-    if hasattr(entry, "source") and isinstance(entry.source, dict):
-        return entry.source.get("title", "Unknown")
+    """Extract news outlet name from feed entry source or link.
+
+    Priority 1: RSS <source> tag — Google News always sets the real publisher
+    name here (e.g. 'NDTV', 'The Indian Express'). Feedparser exposes this as
+    entry.source, a FeedParserDict.  Try both .get() and attribute access, and
+    both 'title' and 'value' key names, to be robust across feedparser versions.
+
+    Priority 2: URL host — only used when the source tag is absent or unhelpful.
+    For news.google.com redirect URLs we return 'Unknown' rather than a misleading
+    'Google News', so the outlet filter can never accidentally match it.
+    """
+    source = getattr(entry, "source", None)
+    if source:
+        title = None
+        if hasattr(source, "get"):
+            title = source.get("title") or source.get("value")
+        if not title:
+            title = getattr(source, "title", None) or getattr(source, "value", None)
+        if title:
+            title = str(title).strip()
+            if title and title.lower() != "google news":
+                return title
+
     link = getattr(entry, "link", "") or ""
     if "news.google.com" in link:
-        return "Google News"
+        return "Unknown"
     try:
         from urllib.parse import urlparse
         host = urlparse(link).netloc
@@ -1142,7 +1162,6 @@ with st.sidebar:
 
     scan_clicked = st.button("Scan News", type="primary", use_container_width=True)
 
-
     # Story Sources — only shown when results are available
     if "results_rows" in st.session_state and st.session_state.results_rows:
         st.divider()
@@ -1192,8 +1211,6 @@ if scan_clicked:
     for key in ("results_rows", "results_caption", "pdf_buffer", "pdf_filename",
                 "source_breakdown", "shortlist_articles", "show_all_articles"):
         st.session_state.pop(key, None)
-    # Reset report-type filter to default so a fresh scan always shows all types
-    st.session_state["selected_report_types"] = "All Report Types"
 
     api_key      = os.getenv("ANTHROPIC_API_KEY", "")
     region_label = f"{district}, {state}"
@@ -1246,21 +1263,56 @@ if scan_clicked:
         _outlet_domains_map = {o: (OUTLET_DOMAINS.get(o) or "").lower() for o in active_outlets}
 
         def _rss_matches_outlet(art):
-            src = (art.get("source_name") or "").lower()
+            src = (art.get("source_name") or "").lower().strip()
             url_host = ""
             try:
                 url_host = urllib.parse.urlparse(art.get("url") or "").netloc.lower()
             except Exception:
                 pass
+
+            # Name match: exact, or source has a leading "The " ("Indian Express" → "The Indian Express").
+            # Avoids false positives like "NDTV" matching "NDTV Food".
             for name in _outlet_names_lower:
-                if name in src or src in name:
+                if src == name or src == "the " + name:
                     return True
+
+            # Domain match: exact hostname only (www. prefix allowed).
+            # Avoids subdomains like food.ndtv.com matching ndtv.com.
             for domain in _outlet_domains_map.values():
-                if domain and domain in url_host:
+                if domain and (url_host == domain or url_host == "www." + domain):
                     return True
+
             return False
 
-        rss_dicts = [a for a in rss_dicts if _rss_matches_outlet(a)]
+        print(f"\n[DEBUG] Outlet filter — selected: {list(active_outlets)}")
+        print(f"  {'Keep':<6} {'Source name':<35} {'URL host':<35} {'Match reason'}")
+        _kept, _dropped = [], []
+        for _a in rss_dicts:
+            _src  = (_a.get("source_name") or "").lower()
+            try:
+                _host = urllib.parse.urlparse(_a.get("url") or "").netloc.lower()
+            except Exception:
+                _host = ""
+            _reason = ""
+            _pass = False
+            for _name in _outlet_names_lower:
+                if _name in _src or _src in _name:
+                    _reason = f"name '{_name}' ↔ src '{_src}'"
+                    _pass = True
+                    break
+            if not _pass:
+                for _oname, _dom in _outlet_domains_map.items():
+                    if _dom and _dom in _host:
+                        _reason = f"domain '{_dom}' in host '{_host}'"
+                        _pass = True
+                        break
+            if not _reason:
+                _reason = f"no match (src='{_src}', host='{_host}')"
+            tag = "KEEP" if _pass else "DROP"
+            print(f"  {tag:<6} {(_a.get('source_name') or '')[:34]:<35} {_host[:34]:<35} {_reason}")
+            (_kept if _pass else _dropped).append(_a)
+        print(f"  → {len(_kept)} kept, {len(_dropped)} dropped")
+        rss_dicts = _kept
 
     rss_total = len(rss_dicts)
 
@@ -1394,6 +1446,16 @@ if scan_clicked:
                 "_affects_client_region":  art.get("affects_client_region", False),
                 "_profile_boosted":        art.get("profile_boosted", False),
             })
+
+        # Debug: raw ranked output — region_tier + both score fields before row-building strips them
+        print(f"\n[RANKED RAW] {state}/{district} — {len(ranked)} political articles from rank_articles():")
+        print(f"  {'#':<3} {'tier':<10} {'acr':<5} {'final_sc':<9} {'cli_adj':<8} {'headline'[:40]}")
+        for _i, _a in enumerate(ranked, 1):
+            print(f"  {_i:<3} {_a.get('region_tier','???'):<10} "
+                  f"{'T' if _a.get('affects_client_region') else 'F':<5} "
+                  f"{_a.get('final_score',0):<9.2f} "
+                  f"{_a.get('client_adjusted_score',0):<8.2f} "
+                  f"{_a.get('headline','')[:40]}")
 
         # Debug: show every article's region flag, score, headline, and Location from AI summary
         SHORTLIST_THRESHOLD = 7.0   # articles >= this score qualify directly; others fill via fallback
