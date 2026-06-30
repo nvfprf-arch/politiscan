@@ -72,6 +72,9 @@ def _run_feeds(queries: list[str]) -> list:
     """Fetch all queries in parallel and return combined entries."""
     base = "https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN:en&q="
     urls = [base + q.replace(" ", "+") for q in queries]
+    print(f"\n[DEBUG] RSS query URLs ({len(urls)} queries):")
+    for u in urls:
+        print(f"  {u}")
     results = [None] * len(urls)
     threads = [
         threading.Thread(target=fetch_feed, args=(url, results, i))
@@ -947,11 +950,35 @@ def _show_results():
         shortlist = [r for r in shortlist if _keyword_match(r)]
     shortlist_urls = {r.get("Link") for r in shortlist}
 
-    st.subheader(f"AI Shortlist ({len(shortlist)} articles)")
-    if shortlist:
-        _render_article_table(shortlist)
+    # ── RENDER-TIME DIAGNOSTIC ──────────────────────────────────────────────
+    _sl_raw   = st.session_state.get("shortlist_articles", [])
+    _all_rows = st.session_state.get("results_rows", [])
+    print(f"\n[RENDER] _show_results() shortlist diagnostic:")
+    print(f"  results_rows in session state:          {len(_all_rows)} articles")
+    print(f"  shortlist_articles in session state:    {len(_sl_raw)} articles")
+    print(f"  selected_type active:                   {selected_type!r}")
+    print(f"  keyword active:                         {keyword!r}")
+    _after_type = [r for r in _sl_raw if selected_type in ("All Report Types", "", None) or r.get("_report_type", "CONFIRMED") == selected_type]
+    _after_kw   = [r for r in _after_type if not keyword or keyword in (r.get("Headline","") or "").lower() or keyword in (r.get("Summary","") or "").lower()]
+    print(f"  shortlist after type filter:            {len(_after_type)} articles")
+    print(f"  shortlist after keyword filter:         {len(_after_kw)} articles")
+    print(f"  final 'shortlist' variable at render:   {len(shortlist)} articles")
+    if _sl_raw and not shortlist:
+        print(f"  !! {len(_sl_raw)} articles in session state were filtered to 0 by display filters")
+        for r in _sl_raw[:5]:
+            print(f"     type={r.get('_report_type','?')!r}  score={r.get('_client_adjusted_score',0):.2f}  {r.get('Headline','')[:60]}")
+    # ── END DIAGNOSTIC ───────────────────────────────────────────────────────
+
+    _sl_total = len(st.session_state.get("shortlist_articles", []))
+    if not shortlist and _sl_total:
+        st.subheader(f"AI Shortlist (0 of {_sl_total} articles shown — hidden by 'Show Report Types' filter)")
+        st.caption("Adjust the **Show Report Types** filter in the sidebar to **All Report Types** to see results.")
     else:
-        st.caption("No articles above shortlist threshold yet. Promote articles below to train your shortlist.")
+        st.subheader(f"AI Shortlist ({len(shortlist)} articles)")
+        if shortlist:
+            _render_article_table(shortlist)
+        else:
+            st.caption("No articles above shortlist threshold yet. Promote articles below to train your shortlist.")
 
     st.divider()
 
@@ -1120,11 +1147,11 @@ with st.sidebar:
     if "results_rows" in st.session_state and st.session_state.results_rows:
         st.divider()
         st.subheader("Filter Results")
-        selected_report_type = st.selectbox(
+        st.selectbox(
             "Show Report Types",
             options=["All Report Types", "CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
+            key="selected_report_types",
         )
-        st.session_state.selected_report_types = selected_report_type
 
         keyword = st.text_input(
             "Filter by Keyword",
@@ -1163,9 +1190,10 @@ with st.sidebar:
 if scan_clicked:
     # Clear previous results so a fresh scan always re-runs fully
     for key in ("results_rows", "results_caption", "pdf_buffer", "pdf_filename",
-                "selected_report_types", "source_breakdown",
-                "shortlist_articles", "show_all_articles"):
+                "source_breakdown", "shortlist_articles", "show_all_articles"):
         st.session_state.pop(key, None)
+    # Reset report-type filter to default so a fresh scan always shows all types
+    st.session_state["selected_report_types"] = "All Report Types"
 
     api_key      = os.getenv("ANTHROPIC_API_KEY", "")
     region_label = f"{district}, {state}"
@@ -1362,23 +1390,62 @@ if scan_clicked:
                 "_sources_list":          art.get("sources_list", [art.get("source_name", "Unknown")]),
                 "_report_type":           report_type,
                 "_signals":               signals_str,
-                "_client_adjusted_score": client_adj,
-                "_profile_boosted":       art.get("profile_boosted", False),
+                "_client_adjusted_score":  client_adj,
+                "_affects_client_region":  art.get("affects_client_region", False),
+                "_profile_boosted":        art.get("profile_boosted", False),
             })
 
-        # Initialise shortlist: score >= 7.0, capped at 15
-        st.session_state.shortlist_articles = [
-            r for r in rows if r.get("_client_adjusted_score", 0) >= 7.0
-        ][:15]
+        # Debug: show every article's region flag, score, headline, and Location from AI summary
+        SHORTLIST_THRESHOLD = 7.0   # articles >= this score qualify directly; others fill via fallback
+        print(f"\n[DEBUG] Full article list after ranking/filtering — {state}/{district}  (threshold={SHORTLIST_THRESHOLD}):")
+        print(f"  {'Rk':<3} {'Score':<6} {'>=7?':<5} {'Region':<14} {'Headline':<55}  Location (from summary)")
+        for r in rows:
+            summ = r.get("Summary", "")
+            if "Location:" in summ:
+                loc_text = summ.split("Location:")[1].split("Political significance:")[0].strip()[:60]
+            else:
+                loc_text = "—"
+            region_label  = "IN-REGION " if r.get("_affects_client_region") else "OUT-OF-REGION"
+            passes_thresh = "YES" if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD else "no"
+            print(f"  {r['Rank']:<3} {r['_client_adjusted_score']:<6.2f} {passes_thresh:<5} {region_label:<14} {r['Headline'][:55]:<55}  {loc_text}")
 
-        dupes_merged = pre_dedup_count - post_dedup_count
-        if active_outlets:
-            filter_note = f"  {rss_total} articles shown (filtered from {total_fetched} total fetched)."
+        # Shortlist: always up to 15 articles.
+        # Primary: articles scoring >= SHORTLIST_THRESHOLD (already region-filtered by rank_articles).
+        # Fallback: top-ranked articles fill remaining slots so the shortlist is never empty
+        #           when valid ranked results exist.
+        _above  = [r for r in rows if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD][:15]
+        if len(_above) < 15:
+            _seen_links = {r.get("Link") for r in _above}
+            _fill = [r for r in rows if r.get("Link") not in _seen_links]
+            _shortlist = (_above + _fill)[:15]
         else:
-            filter_note = f"  {total_fetched} articles total - {nd_count} from NewsData.io, {rss_total} from Google RSS."
+            _shortlist = _above
+        st.session_state.shortlist_articles = _shortlist
+
+        print(f"\n[DEBUG] Shortlist build:")
+        print(f"  Total rows:             {len(rows)}")
+        print(f"  Articles >= {SHORTLIST_THRESHOLD}:       {len(_above)}")
+        print(f"  Final shortlist size:   {len(_shortlist)}")
+        for r in _shortlist:
+            marker = "* " if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD else "  "
+            print(f"  {marker}score={r.get('_client_adjusted_score',0):.2f}  {r.get('Headline','')[:70]}")
+
+        # Debug: print counts at each pipeline stage
+        dupes_merged = pre_dedup_count - post_dedup_count
+        print("\n[DEBUG] Pipeline counts:")
+        print(f"  Total fetched (pre-outlet-filter): {total_fetched}  (rss_raw={rss_total_raw}, nd={nd_count})")
+        print(f"  After outlet filter (pre-dedup):   {pre_dedup_count}  (rss={rss_total}, nd={nd_count})")
+        print(f"  After deduplication:               {post_dedup_count}  ({dupes_merged} duplicates merged)")
+        print(f"  After ranking (political filter):  {len(ranked)}")
+        print(f"  Shortlist (>= {SHORTLIST_THRESHOLD} + fill-to-15): {len(st.session_state.shortlist_articles)}")
+
+        if active_outlets:
+            filter_note = f"  {pre_dedup_count} articles after outlet filter (from {total_fetched} total fetched)."
+        else:
+            filter_note = f"  {total_fetched} total fetched — {nd_count} from NewsData.io, {rss_total} from Google RSS."
         caption = (
-            f"**{len(rows)} unique stories** from **{len(ranked)} political articles**{scope_note}.  "
-            f"{dupes_merged} duplicates merged.{filter_note}"
+            f"**{len(ranked)} political articles ranked**{scope_note}.  "
+            f"{dupes_merged} duplicates merged from {pre_dedup_count} candidates.{filter_note}"
         )
 
         st.session_state.results_rows    = rows

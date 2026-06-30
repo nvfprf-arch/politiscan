@@ -65,7 +65,23 @@ def score_importance(
         "1-2 MINIMAL: repetition of known information, very local event with no broader implications. "
         "Assign one PRIMARY_TAG from: ELECTION, CABINET, POLICY, PROTEST, ALLIANCE, SCANDAL, "
         "APPOINTMENT, STATEMENT, PARTY_INTERNAL, GOVERNANCE. "
-        f"State context: {state} and {district}. "
+        f"CLIENT REGION: {district}, {state}. "
+        f"affects_client_region must be true ONLY if this article explicitly names {district} "
+        f"or {state} as the location where the event occurred. "
+        f"affects_client_region must be false if the article is set in any other Indian state "
+        f"(e.g. Kerala, Telangana, Punjab, Tamil Nadu, Rajasthan, Andhra Pradesh, Maharashtra, "
+        f"West Bengal, Uttar Pradesh, Bihar, Delhi — any state that is NOT {state}). "
+        f"affects_client_region must also be false for national-level stories about Parliament, "
+        f"the Supreme Court, the PM, central government, or pan-India issues unless the article "
+        f"explicitly says the event is happening in or specifically affecting {state} or {district}. "
+        f"Geography determines this field, NOT political importance. "
+        f"A hugely important story set in Kerala is still false for a {state} client. "
+        f"Concrete examples that MUST return false for a {state}/{district} client: "
+        f"(1) nurses' strike in Thrissur, Kerala; "
+        f"(2) CM Revanth Reddy policy decision in Telangana; "
+        f"(3) Punjabi University funding dispute in Punjab; "
+        f"(4) Supreme Court ruling on Rajasthan land acquisition; "
+        f"(5) Salem conservancy workers' protest in Tamil Nadu. "
         "Return only a JSON object: "
         '{"importance_score": integer 1 to 10, "primary_tag": "TAG", '
         '"one_line_reason": "why this score", "affects_client_region": true or false, '
@@ -102,6 +118,7 @@ def score_importance(
                 messages=[{"role": "user", "content": user_message}],
             )
             raw = message.content[0].text.strip()
+            print(f"  [scorer RAW] hl={headline[:60]!r}  json={raw[:300]}")
             break
         except anthropic.RateLimitError:
             if attempt < 2:

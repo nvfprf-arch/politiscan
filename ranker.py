@@ -11,6 +11,25 @@ from scorer import score_importance, get_source_tier
 
 SOURCE_TIER_SCORES = {"tier1": 10, "tier2": 7, "tier3": 4}
 
+# Complete list of Indian states and union territories (lowercase).
+# Used for the deterministic region-override check.
+_ALL_INDIAN_REGIONS = {
+    "andhra pradesh", "arunachal pradesh", "assam", "bihar", "chhattisgarh",
+    "goa", "gujarat", "haryana", "himachal pradesh", "jharkhand", "karnataka",
+    "kerala", "madhya pradesh", "maharashtra", "manipur", "meghalaya", "mizoram",
+    "nagaland", "odisha", "punjab", "rajasthan", "sikkim", "tamil nadu",
+    "telangana", "tripura", "uttar pradesh", "uttarakhand", "west bengal",
+    "andaman and nicobar", "chandigarh", "dadra and nagar haveli", "daman and diu",
+    "delhi", "jammu and kashmir", "ladakh", "lakshadweep", "puducherry",
+}
+
+# Geographic relevance scoring controls.
+# Articles where affects_client_region=False have their final_score multiplied by this factor.
+OUT_OF_REGION_PENALTY = 0.6
+# After ranking, articles with affects_client_region=False AND score below this threshold
+# are dropped entirely (major national stories above the threshold are still surfaced).
+OUT_OF_REGION_SCORE_THRESHOLD = 6.0
+
 
 def apply_client_profile(base_score: float, article: dict, client_profile: dict | None) -> float:
     """Adjust base_score using a client profile. Returns base_score if profile is None."""
@@ -71,6 +90,25 @@ def _process_article(article: dict, state: str, district: str, api_key: str) -> 
     # Step 2 — importance score
     imp = score_importance(headline, snippet, source_name, published, state, district, api_key)
 
+    # Step 2b — deterministic region override (safety net independent of LLM judgment).
+    # If the article text names any other Indian state/UT and does NOT mention the
+    # target state or district at all, force affects_client_region to False.
+    _text_lower   = (headline + " " + snippet).lower()
+    _state_lower  = state.lower()
+    _dist_lower   = district.lower()
+    _target_in_text = _state_lower in _text_lower or _dist_lower in _text_lower
+    _other_states = _ALL_INDIAN_REGIONS - {_state_lower}
+    _other_found  = next((s for s in _other_states if s in _text_lower), None)
+    if _other_found and not _target_in_text:
+        if imp["affects_client_region"]:
+            print(f"  [REGION OVERRIDE] Claude=True → forced False  "
+                  f"('{_other_found}' in text, '{state}/{district}' not in text)  "
+                  f"{headline[:65]}")
+        imp = {**imp, "affects_client_region": False}
+    elif not _target_in_text and imp["affects_client_region"]:
+        # No other state name found but target also absent — log for visibility
+        print(f"  [REGION WARN] Claude=True but '{state}/{district}' not found in text  {headline[:65]}")
+
     # Step 3 — source tier & score
     tier         = get_source_tier(source_name)
     source_score = SOURCE_TIER_SCORES.get(tier, 4)
@@ -86,7 +124,15 @@ def _process_article(article: dict, state: str, district: str, api_key: str) -> 
         2,
     )
 
-    # Step 6 — assemble
+    # Step 6 — geographic relevance penalty for out-of-region articles
+    pre_penalty = final_score
+    if not imp["affects_client_region"]:
+        final_score = round(final_score * OUT_OF_REGION_PENALTY, 2)
+
+    region_tag = "IN-REGION" if imp["affects_client_region"] else "OUT-OF-REGION"
+    print(f"  [score] {region_tag:<14} pre={pre_penalty:.2f} post={final_score:.2f}  {headline[:65]}")
+
+    # Step 7 — assemble
     return {
         **article,
         "classification":        cls["classification"],
@@ -141,6 +187,24 @@ def rank_articles(
                 results.append(result)
 
     results.sort(key=lambda x: x["client_adjusted_score"], reverse=True)
+
+    # Step 4 — hard filter: drop out-of-region articles below the score threshold
+    before_filter = len(results)
+    results = [
+        r for r in results
+        if r["affects_client_region"] or r["client_adjusted_score"] >= OUT_OF_REGION_SCORE_THRESHOLD
+    ]
+    dropped = before_filter - len(results)
+
+    # Debug: print per-article region flag and score
+    print(f"\n[DEBUG] rank_articles: {state}/{district} — "
+          f"{before_filter} political articles scored, {dropped} out-of-region articles dropped "
+          f"(score < {OUT_OF_REGION_SCORE_THRESHOLD}), {len(results)} returned.")
+    print(f"  {'Rank':<4} {'Score':<6} {'Region':<7} {'Headline'[:65]}")
+    for i, r in enumerate(results, 1):
+        region_flag = "YES" if r["affects_client_region"] else "NO "
+        print(f"  {i:<4} {r['client_adjusted_score']:<6.2f} {region_flag}    {r.get('headline', '')[:65]}")
+
     return results
 
 
