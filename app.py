@@ -330,6 +330,11 @@ def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: s
 
     all_articles = [art for bucket in per_domain for art in bucket]
 
+    from collections import Counter as _Counter
+    _src_counts = _Counter(a.get("source_name", "?") for a in all_articles)
+    print(f"  [ND COMBINED] Total NewsData articles before dedup: {len(all_articles)}")
+    print(f"  [ND COMBINED] Sources: {dict(_src_counts)}")
+
     cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
     recent = []
     for art in all_articles:
@@ -1421,6 +1426,7 @@ if scan_clicked:
             (_kept if _pass else _dropped).append(_a)
         print(f"  → {len(_kept)} kept, {len(_dropped)} dropped")
         rss_dicts = _kept
+        print(f"[PIPELINE] After outlet filter: {len(rss_dicts)} RSS articles remain")
 
     rss_total = len(rss_dicts)
 
@@ -1428,6 +1434,10 @@ if scan_clicked:
     nd_count      = len(unique_nd)
     total_fetched = rss_total_raw + nd_count   # pre-filter total for display
     article_dicts = rss_dicts + unique_nd
+
+    print(f"\n[PIPELINE] Before dedup: {rss_total} RSS articles, {nd_count} NewsData articles")
+    print(f"[PIPELINE] newsdata_dicts length (raw from _nd_worker): {len(newsdata_dicts)}")
+    print(f"[PIPELINE] Combined article_dicts total: {len(article_dicts)}")
 
     if not article_dicts and active_outlets:
         st.warning(
