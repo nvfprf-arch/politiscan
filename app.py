@@ -271,11 +271,14 @@ def entries_to_dicts(entries: list, channel: str = "rss") -> list:
     return dicts
 
 
-def _fetch_newsdata_one_domain(domain: str, district: str, state: str, api_key: str, language: str) -> list:
-    """Fetch NewsData.io articles for a single domain. Returns raw article dicts."""
-    location = f"{district} {state}"
+def _fetch_newsdata_one_domain(domain: str, district: str, state: str, api_key: str, language: str) -> tuple:
+    """Fetch NewsData.io articles for a single domain.
+    Returns (articles, last_error_str) where last_error_str is '' on full success.
+    """
+    location  = f"{district} {state}"
     base_url  = "https://newsdata.io/api/1/latest"
     articles  = []
+    last_error = ""
     for q in (f"{location} politics", f"{location} election BJP Congress MLA minister"):
         params = {
             "apikey":    api_key,
@@ -289,7 +292,9 @@ def _fetch_newsdata_one_domain(domain: str, district: str, state: str, api_key: 
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "PolitiScan/1.1"})
             with urllib.request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode())
+                http_status = resp.status
+                raw_body    = resp.read()
+            data = json.loads(raw_body.decode())
             if data.get("status") == "success":
                 for item in data.get("results", []):
                     articles.append({
@@ -300,9 +305,11 @@ def _fetch_newsdata_one_domain(domain: str, district: str, state: str, api_key: 
                         "url":            item.get("link", ""),
                         "source_channel": "newsdata",
                     })
-        except Exception:
-            pass
-    return articles
+            else:
+                last_error = f"HTTP {http_status} | status={data.get('status')!r} | {raw_body.decode()[:200]}"
+        except Exception as _exc:
+            last_error = f"Exception: {_exc}"
+    return articles, last_error
 
 
 def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: str, language: str = "en") -> tuple:
@@ -313,7 +320,7 @@ def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: s
     if not api_key or not domains:
         return [], {}
 
-    per_domain: list = [[] for _ in domains]
+    per_domain: list = [([], "") for _ in domains]   # (articles, error_str) per domain
 
     def _worker(idx: int, dom: str):
         per_domain[idx] = _fetch_newsdata_one_domain(dom, district, state, api_key, language)
@@ -324,12 +331,13 @@ def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: s
     for t in threads:
         t.join()
 
-    domain_counts = {}
-    for dom, arts in zip(domains, per_domain):
-        domain_counts[dom] = len(arts)
-        print(f"  [NewsData] {dom} -> {len(arts)} articles  (lang={language})")
+    domain_counts = {}   # {domain: {"count": n, "error": str}}
+    for dom, (arts, err) in zip(domains, per_domain):
+        domain_counts[dom] = {"count": len(arts), "error": err}
+        print(f"  [NewsData] {dom} -> {len(arts)} articles  (lang={language})"
+              + (f"  ERROR: {err}" if err else ""))
 
-    all_articles = [art for bucket in per_domain for art in bucket]
+    all_articles = [art for (arts, _err) in per_domain for art in arts]
 
     from collections import Counter as _Counter
     _src_counts = _Counter(a.get("source_name", "?") for a in all_articles)
@@ -1452,12 +1460,15 @@ if scan_clicked:
         _dbg_nd_key = (_dbg_nd_key or "").strip()
         st.warning(
             "**DEBUG — NewsData fetch results:**\n\n"
-            f"- vijaykarnataka.com: **{nd_domain_counts.get('vijaykarnataka.com', 0)}** articles\n"
-            f"- prajavani.net: **{nd_domain_counts.get('prajavani.net', 0)}** articles\n"
-            f"- udayavani.com: **{nd_domain_counts.get('udayavani.com', 0)}** articles\n"
-            f"- tv9kannada.com: **{nd_domain_counts.get('tv9kannada.com', 0)}** articles\n"
-            f"- kannadaprabha.com: **{nd_domain_counts.get('kannadaprabha.com', 0)}** articles\n"
-            f"- Total NewsData (raw): **{sum(nd_domain_counts.values())}**  |  "
+            + "".join(
+                f"- {dom}: **{nd_domain_counts.get(dom, {}).get('count', 0)}** articles"
+                + (f" | Error: `{nd_domain_counts.get(dom, {}).get('error', '')[:200]}`"
+                   if nd_domain_counts.get(dom, {}).get("error") else "")
+                + "\n"
+                for dom in ("vijaykarnataka.com", "prajavani.net", "udayavani.com",
+                            "tv9kannada.com", "kannadaprabha.com")
+            )
+            + f"- Total NewsData (raw): **{sum(v.get('count',0) for v in nd_domain_counts.values())}**  |  "
             f"after dedup: **{nd_count}**\n"
             f"- Total RSS (after outlet filter): **{rss_total}**\n"
             f"- Combined (RSS + NewsData): **{len(article_dicts)}**\n\n"
