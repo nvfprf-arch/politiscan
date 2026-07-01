@@ -1,6 +1,114 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+# Kannada-script names for Karnataka districts.
+# Used to build regional-language RSS queries for Kannada outlets.
+KANNADA_DISTRICTS = {
+    "Bengaluru":  "ಬೆಂಗಳೂರು",
+    "Mysuru":     "ಮೈಸೂರು",
+    "Mangaluru":  "ಮಂಗಳೂರು",
+    "Hubballi":   "ಹುಬ್ಬಳ್ಳಿ",
+    "Belagavi":   "ಬೆಳಗಾವಿ",
+    "Dharwad":    "ಧಾರವಾಡ",
+    "Kalaburagi": "ಕಲಬುರಗಿ",
+    "Shivamogga": "ಶಿವಮೊಗ್ಗ",
+    "Tumakuru":   "ತುಮಕೂರು",
+    "Vijayapura": "ವಿಜಯಪುರ",
+    "Ballari":    "ಬಳ್ಳಾರಿ",
+    "Davangere":  "ದಾವಣಗೆರೆ",
+    "Bidar":      "ಬೀದರ",
+    "Udupi":      "ಉಡುಪಿ",
+    "Raichur":    "ರಾಯಚೂರು",
+    "Hassan":     "ಹಾಸನ",
+}
+
+# Regional-language query templates per state.
+# {district} is replaced at runtime with the appropriate district name
+# (Kannada script for Karnataka; English for all other states).
+# Each list should contain exactly 2 query strings.
+STATE_REGIONAL_QUERIES = {
+    "Karnataka": [
+        "{district} ರಾಜಕೀಯ when:2d",
+        "ಕರ್ನಾಟಕ ಬಿಜೆಪಿ ಕಾಂಗ್ರೆಸ್ when:2d",
+    ],
+    "Tamil Nadu": [
+        "{district} அரசியல் when:2d",
+        "தமிழ்நாடு பாஜக காங்கிரஸ் when:2d",
+    ],
+    "Maharashtra": [
+        "{district} राजकारण when:2d",
+        "महाराष्ट्र भाजप काँग्रेस when:2d",
+    ],
+    "Uttar Pradesh": [
+        "{district} राजनीति when:2d",
+        "उत्तर प्रदेश भाजपा कांग्रेस when:2d",
+    ],
+    "Bihar": [
+        "{district} राजनीति when:2d",
+        "बिहार भाजपा जदयू when:2d",
+    ],
+    "Madhya Pradesh": [
+        "{district} राजनीति when:2d",
+        "मध्य प्रदेश भाजपा कांग्रेस when:2d",
+    ],
+    "Rajasthan": [
+        "{district} राजनीति when:2d",
+        "राजस्थान भाजपा कांग्रेस when:2d",
+    ],
+    "Haryana": [
+        "{district} राजनीति when:2d",
+        "हरियाणा भाजपा कांग्रेस when:2d",
+    ],
+    "Delhi": [
+        "{district} राजनीति when:2d",
+        "दिल्ली आप भाजपा कांग्रेस when:2d",
+    ],
+    "Gujarat": [
+        "{district} રાજકારણ when:2d",
+        "ગુજરાત ભાજપ કોંગ્રેસ when:2d",
+    ],
+    "West Bengal": [
+        "{district} রাজনীতি when:2d",
+        "পশ্চিমবঙ্গ তৃণমূল ভাজপা when:2d",
+    ],
+    "Andhra Pradesh": [
+        "{district} రాజకీయాలు when:2d",
+        "ఆంధ్రప్రదేశ్ బీజేపీ కాంగ్రెస్ when:2d",
+    ],
+    "Telangana": [
+        "{district} రాజకీయాలు when:2d",
+        "తెలంగాణ బీఆర్ఎస్ కాంగ్రెస్ when:2d",
+    ],
+    "Kerala": [
+        "{district} രാഷ്ട്രീയം when:2d",
+        "കേരളം ബിജെപി കോൺഗ്രസ് when:2d",
+    ],
+    "Odisha": [
+        "{district} ରାଜନୀତି when:2d",
+        "ଓଡ଼ିଶା ଭାଜପା କଂଗ୍ରେସ when:2d",
+    ],
+    "Punjab": [
+        "{district} ਸਿਆਸਤ when:2d",
+        "ਪੰਜਾਬ ਆਪ ਭਾਜਪਾ ਕਾਂਗਰਸ when:2d",
+    ],
+    "Jharkhand": [
+        "{district} राजनीति when:2d",
+        "झारखंड भाजपा कांग्रेस when:2d",
+    ],
+    "Chhattisgarh": [
+        "{district} राजनीति when:2d",
+        "छत्तीसगढ़ भाजपा कांग्रेस when:2d",
+    ],
+    "Uttarakhand": [
+        "{district} राजनीति when:2d",
+        "उत्तराखंड भाजपा कांग्रेस when:2d",
+    ],
+    "Himachal Pradesh": [
+        "{district} राजनीति when:2d",
+        "हिमाचल प्रदेश भाजपा कांग्रेस when:2d",
+    ],
+}
+
 REGIONS = {
     "Andhra Pradesh": [
         "Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Kurnool",

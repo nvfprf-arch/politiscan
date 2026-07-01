@@ -24,7 +24,7 @@ import anthropic
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
-from regions import REGIONS
+from regions import REGIONS, KANNADA_DISTRICTS, STATE_REGIONAL_QUERIES
 from outlets import STATE_OUTLETS, OUTLET_DOMAINS
 from ranker import rank_articles
 from deduplicator import deduplicate_all
@@ -68,6 +68,23 @@ def _build_outlet_queries(location: str, domain: str) -> list[str]:
     ]
 
 
+def _build_regional_queries(district: str, state: str) -> list[str]:
+    """Return 2 regional-language RSS queries for states with major regional outlets.
+
+    For Karnataka the district name is substituted in Kannada script when a
+    mapping exists; for all other states the English district name is used.
+    Returns an empty list for states without a regional query definition.
+    """
+    templates = STATE_REGIONAL_QUERIES.get(state, [])
+    if not templates:
+        return []
+    if state == "Karnataka":
+        district_name = KANNADA_DISTRICTS.get(district, district)
+    else:
+        district_name = district
+    return [t.replace("{district}", district_name) for t in templates]
+
+
 def _run_feeds(queries: list[str]) -> list:
     """Fetch all queries in parallel and return combined entries."""
     base = "https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN:en&q="
@@ -100,6 +117,7 @@ def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> 
     """
     location = f"{district} {state}"
     queries = _build_queries(location)
+    queries.extend(_build_regional_queries(district, state))
     for outlet in (selected_outlets or []):
         domain = OUTLET_DOMAINS.get(outlet)
         if domain:
@@ -112,6 +130,7 @@ def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> 
 
     # Fallback: state-only queries
     state_queries = _build_queries(state)
+    state_queries.extend(_build_regional_queries(district, state))
     for outlet in (selected_outlets or []):
         domain = OUTLET_DOMAINS.get(outlet)
         if domain:
@@ -252,7 +271,7 @@ def entries_to_dicts(entries: list, channel: str = "rss") -> list:
     return dicts
 
 
-def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: str) -> list:
+def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: str, language: str = "en") -> list:
     """Fetch recent articles from NewsData.io filtered to specified outlet domains.
     Returns a list of ranker-compatible dicts with source_channel='newsdata'.
     """
@@ -273,7 +292,7 @@ def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: s
             "apikey":    api_key,
             "q":         q,
             "country":   "in",
-            "language":  "en",
+            "language":  language,
             "category":  "politics",
             "domainurl": domain_str,
         }
@@ -924,7 +943,10 @@ def _show_results():
         nd_total      = bd.get("newsdata_total", 0)
         outlet_counts = bd.get("outlet_counts", {})
 
+        kannada_nd_total = bd.get("kannada_nd_total", 0)
         header_parts = []
+        if kannada_nd_total:
+            header_parts.append(f"**{kannada_nd_total}** from NewsData.io (Kannada outlets)")
         if nd_total:
             header_parts.append(f"**{nd_total}** from NewsData.io (primary)")
         header_parts.append(f"**{rss_total}** from Google RSS (secondary)")
@@ -1217,7 +1239,7 @@ if scan_clicked:
     st.session_state.region_label = region_label
 
     rss_result = [None, None]
-    nd_result  = [[]]
+    nd_result  = [[], 0]   # [articles, kannada_nd_count]
 
     def _rss_worker():
         entries, scope_val = fetch_all_feeds(district, state, tuple(active_outlets))
@@ -1233,9 +1255,37 @@ if scan_clicked:
                 _key = ""
             if not _key:
                 _key = os.getenv("NEWSDATA_API_KEY", "").strip()
+
+            # Kannada outlets are not in Google News RSS; route them through
+            # NewsData.io with language="kn,en" using confirmed working domains.
+            _KANNADA_ND_DOMAINS = {
+                "Vijaya Karnataka": "vijaykarnataka.com",
+                "Prajavani":        "prajavani.net",
+                "Udayavani":        "udayavani.com",
+                "Kannada Prabha":   "kannadaprabha.com",
+                "TV9 Kannada":      "tv9kannada.com",
+            }
+
             if active_outlets:
-                _domains = [d for d in (OUTLET_DOMAINS.get(o) for o in active_outlets) if d]
-                nd_result[0] = fetch_newsdata_articles(district, state, _domains, _key) if _domains else []
+                _kannada_selected = [o for o in active_outlets if o in _KANNADA_ND_DOMAINS]
+                _other_selected   = [o for o in active_outlets if o not in _KANNADA_ND_DOMAINS]
+
+                _all_nd = []
+
+                # Kannada outlets → NewsData.io with kn,en language
+                if _kannada_selected:
+                    _kn_domains = [_KANNADA_ND_DOMAINS[o] for o in _kannada_selected]
+                    _kn_arts    = fetch_newsdata_articles(district, state, _kn_domains, _key, language="kn,en")
+                    nd_result[1] = len(_kn_arts)   # store Kannada ND count separately
+                    _all_nd.extend(_kn_arts)
+
+                # Non-Kannada outlets → NewsData.io with en language (existing behaviour)
+                if _other_selected:
+                    _en_domains = [d for d in (OUTLET_DOMAINS.get(o) for o in _other_selected) if d]
+                    if _en_domains:
+                        _all_nd.extend(fetch_newsdata_articles(district, state, _en_domains, _key))
+
+                nd_result[0] = _all_nd
             else:
                 nd_result[0] = fetch_newsdata_primary(district, state, _key)
         except Exception as _e:
@@ -1248,19 +1298,47 @@ if scan_clicked:
         t_rss.start(); t_nd.start()
         t_rss.join();  t_nd.join()
 
-    raw_entries    = rss_result[0] or []
-    scope          = rss_result[1] or "district"
-    newsdata_dicts = nd_result[0] or []
+    raw_entries      = rss_result[0] or []
+    scope            = rss_result[1] or "district"
+    newsdata_dicts   = nd_result[0] or []
+    kannada_nd_count = nd_result[1] or 0
 
     recent, _  = filter_recent(raw_entries, hours=36)
     unique_rss = deduplicate(recent, threshold=0.70)
     rss_dicts  = entries_to_dicts(unique_rss, channel="rss")
     rss_total_raw = len(rss_dicts)
 
+    # Diagnostic: print any source names that look like Kannada outlets,
+    # so we can see exactly how Google News labels them regardless of outlet filter.
+    _kannada_signals = ("vijay", "prajav", "udaya", "kannada")
+    _kannada_hits = [
+        a.get("source_name", "") for a in rss_dicts
+        if any(sig in (a.get("source_name") or "").lower() for sig in _kannada_signals)
+    ]
+    if _kannada_hits:
+        print(f"\n[KANNADA SOURCE DEBUG] source_names matching Kannada outlet signals:")
+        for _s in _kannada_hits:
+            print(f"  {_s!r}")
+    else:
+        print(f"\n[KANNADA SOURCE DEBUG] no source_names matched Kannada signals in {len(rss_dicts)} RSS articles")
+
+    _rss_dicts_unfiltered = list(rss_dicts)   # snapshot before outlet filter
+
     # Filter RSS results by selected outlets (source name or domain match)
     if active_outlets:
         _outlet_names_lower = [o.lower() for o in active_outlets]
         _outlet_domains_map = {o: (OUTLET_DOMAINS.get(o) or "").lower() for o in active_outlets}
+
+        # Kannada outlets need looser matching because Google News may label them
+        # inconsistently. Map each Kannada outlet name to known URL substrings.
+        _KANNADA_URL_FRAGMENTS = {
+            "vijaya karnataka": ["vijaykarnataka.com", "vijaykarnatakaepaper.com"],
+            "prajavani":        ["prajavani.net"],
+            "udayavani":        ["udayavani.com"],
+            "kannada prabha":   ["kannadaprabha.com"],
+        }
+        _active_kannada = {k: v for k, v in _KANNADA_URL_FRAGMENTS.items()
+                           if k in _outlet_names_lower}
 
         def _rss_matches_outlet(art):
             src = (art.get("source_name") or "").lower().strip()
@@ -1281,6 +1359,19 @@ if scan_clicked:
             for domain in _outlet_domains_map.values():
                 if domain and (url_host == domain or url_host == "www." + domain):
                     return True
+
+            # Kannada-outlet fallbacks (URL substring + headline suffix).
+            # Only runs when a Kannada outlet is in the selected set.
+            if _active_kannada:
+                headline = (art.get("headline") or "").lower()
+                for outlet_key, url_fragments in _active_kannada.items():
+                    # Fallback 1: URL host contains a known Kannada domain fragment
+                    if any(frag in url_host for frag in url_fragments):
+                        return True
+                    # Fallback 2: headline/title contains outlet name as substring
+                    # (Google RSS often appends "- Vijaya Karnataka" to titles)
+                    if outlet_key in headline:
+                        return True
 
             return False
 
@@ -1336,9 +1427,10 @@ if scan_clicked:
         )
 
         st.session_state.source_breakdown = {
-            "rss_total":      rss_total,
-            "newsdata_total": nd_count,
-            "outlet_counts":  dict(outlet_counts),
+            "rss_total":        rss_total,
+            "newsdata_total":   nd_count,
+            "kannada_nd_total": kannada_nd_count,
+            "outlet_counts":    dict(outlet_counts),
         }
 
         pre_dedup_count = len(article_dicts)
