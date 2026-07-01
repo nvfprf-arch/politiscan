@@ -271,47 +271,64 @@ def entries_to_dicts(entries: list, channel: str = "rss") -> list:
     return dicts
 
 
-def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: str, language: str = "en") -> list:
-    """Fetch recent articles from NewsData.io filtered to specified outlet domains.
-    Returns a list of ranker-compatible dicts with source_channel='newsdata'.
-    """
-    if not api_key or not domains:
-        return []
-
+def _fetch_newsdata_one_domain(domain: str, district: str, state: str, api_key: str, language: str) -> list:
+    """Fetch NewsData.io articles for a single domain. Returns raw article dicts."""
     location = f"{district} {state}"
-    queries = [
-        f"{location} politics",
-        f"{location} election BJP Congress MLA minister",
-    ]
-    domain_str = ",".join(domains)
-    base_url = "https://newsdata.io/api/1/latest"
-    all_articles = []
-
-    for q in queries:
+    base_url  = "https://newsdata.io/api/1/latest"
+    articles  = []
+    for q in (f"{location} politics", f"{location} election BJP Congress MLA minister"):
         params = {
             "apikey":    api_key,
             "q":         q,
             "country":   "in",
             "language":  language,
             "category":  "politics",
-            "domainurl": domain_str,
+            "domainurl": domain,
         }
         url = base_url + "?" + urllib.parse.urlencode(params)
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "PolitiScan/1.1"})
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode())
-            for item in data.get("results", []):
-                all_articles.append({
-                    "headline":      item.get("title", ""),
-                    "snippet":       (item.get("description") or item.get("content") or "")[:600],
-                    "source_name":   item.get("source_id", "Unknown"),
-                    "published_iso": item.get("pubDate", ""),
-                    "url":           item.get("link", ""),
-                    "source_channel": "newsdata",
-                })
+            if data.get("status") == "success":
+                for item in data.get("results", []):
+                    articles.append({
+                        "headline":       item.get("title", ""),
+                        "snippet":        (item.get("description") or item.get("content") or "")[:600],
+                        "source_name":    item.get("source_id", "Unknown"),
+                        "published_iso":  item.get("pubDate", ""),
+                        "url":            item.get("link", ""),
+                        "source_channel": "newsdata",
+                    })
         except Exception:
             pass
+    return articles
+
+
+def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: str, language: str = "en") -> list:
+    """Fetch recent articles from NewsData.io for each domain in parallel.
+    Each domain gets its own API call so a missing domain doesn't silence others.
+    Returns a deduplicated list of ranker-compatible dicts with source_channel='newsdata'.
+    """
+    if not api_key or not domains:
+        return []
+
+    per_domain: list = [[] for _ in domains]
+
+    def _worker(idx: int, dom: str):
+        per_domain[idx] = _fetch_newsdata_one_domain(dom, district, state, api_key, language)
+
+    threads = [threading.Thread(target=_worker, args=(i, d), daemon=True) for i, d in enumerate(domains)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    # Log per-domain counts so each outlet's contribution is visible
+    for dom, arts in zip(domains, per_domain):
+        print(f"  [NewsData] {dom} -> {len(arts)} articles  (lang={language})")
+
+    all_articles = [art for bucket in per_domain for art in bucket]
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
     recent = []
@@ -323,7 +340,7 @@ def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: s
             if pub >= cutoff:
                 recent.append(art)
         except Exception:
-            recent.append(art)
+            recent.append(art)   # keep if date unparseable
 
     seen: set = set()
     unique = []
@@ -1332,7 +1349,7 @@ if scan_clicked:
         # Kannada outlets need looser matching because Google News may label them
         # inconsistently. Map each Kannada outlet name to known URL substrings.
         _KANNADA_URL_FRAGMENTS = {
-            "vijaya karnataka": ["vijaykarnataka.com", "vijaykarnatakaepaper.com"],
+            "vijaya karnataka": ["vijaykarnataka.com"],
             "prajavani":        ["prajavani.net"],
             "udayavani":        ["udayavani.com"],
             "kannada prabha":   ["kannadaprabha.com"],

@@ -204,7 +204,7 @@ OUTLET_DOMAINS = {
     "Hindustan":          "livehindustan.com",
     "IBC24":              "ibc24.in",
     # Kannada
-    "Vijaya Karnataka":   "vijaykarnatakaepaper.com",
+    "Vijaya Karnataka":   "vijaykarnataka.com",
     "Prajavani":          "prajavani.net",
     "Udayavani":          "udayavani.com",
     "TV9 Kannada":        "tv9kannada.com",
