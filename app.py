@@ -1273,11 +1273,10 @@ if scan_clicked:
         import sys
         try:
             try:
-                _key = (st.secrets.get("NEWSDATA_API_KEY") or "").strip()
+                _key = st.secrets["NEWSDATA_API_KEY"]
             except Exception:
-                _key = ""
-            if not _key:
-                _key = os.getenv("NEWSDATA_API_KEY", "").strip()
+                _key = os.getenv("NEWSDATA_API_KEY", "")
+            _key = (_key or "").strip()
 
             # Kannada outlets are not in Google News RSS; route them through
             # NewsData.io with language="kn,en" using confirmed working domains.
@@ -1446,6 +1445,11 @@ if scan_clicked:
     # --- TEMPORARY DEBUG UI (remove after Kannada outlet investigation) ---
     _KANNADA_ND_OUTLET_NAMES = {"Vijaya Karnataka", "Prajavani", "Udayavani", "Kannada Prabha", "TV9 Kannada"}
     if active_outlets and any(o in _KANNADA_ND_OUTLET_NAMES for o in active_outlets):
+        try:
+            _dbg_nd_key = st.secrets["NEWSDATA_API_KEY"]
+        except Exception:
+            _dbg_nd_key = os.getenv("NEWSDATA_API_KEY", "")
+        _dbg_nd_key = (_dbg_nd_key or "").strip()
         st.warning(
             "**DEBUG — NewsData fetch results:**\n\n"
             f"- vijaykarnataka.com: **{nd_domain_counts.get('vijaykarnataka.com', 0)}** articles\n"
@@ -1458,8 +1462,8 @@ if scan_clicked:
             f"- Total RSS (after outlet filter): **{rss_total}**\n"
             f"- Combined (RSS + NewsData): **{len(article_dicts)}**\n\n"
             f"**API key check:**\n"
-            f"- NEWSDATA_API_KEY present: **{bool(os.getenv('NEWSDATA_API_KEY'))}**\n"
-            f"- NEWSDATA_API_KEY first 8 chars: `{os.getenv('NEWSDATA_API_KEY', '')[:8]}`"
+            f"- NEWSDATA_API_KEY present: **{bool(_dbg_nd_key)}**\n"
+            f"- NEWSDATA_API_KEY first 8 chars: `{_dbg_nd_key[:8]}`"
         )
     # --- END TEMPORARY DEBUG UI ---
 
