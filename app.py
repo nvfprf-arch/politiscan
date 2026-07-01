@@ -1456,7 +1456,10 @@ if scan_clicked:
             f"- Total NewsData (raw): **{sum(nd_domain_counts.values())}**  |  "
             f"after dedup: **{nd_count}**\n"
             f"- Total RSS (after outlet filter): **{rss_total}**\n"
-            f"- Combined (RSS + NewsData): **{len(article_dicts)}**"
+            f"- Combined (RSS + NewsData): **{len(article_dicts)}**\n\n"
+            f"**API key check:**\n"
+            f"- NEWSDATA_API_KEY present: **{bool(os.getenv('NEWSDATA_API_KEY'))}**\n"
+            f"- NEWSDATA_API_KEY first 8 chars: `{os.getenv('NEWSDATA_API_KEY', '')[:8]}`"
         )
     # --- END TEMPORARY DEBUG UI ---
 
