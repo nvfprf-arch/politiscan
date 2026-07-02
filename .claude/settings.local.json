@@ -33,7 +33,8 @@
       "Bash(grep -ao \"keyboard_double_arrow\\\\|material.symbols\\\\|stSidebar.*Control\\\\|collapsedControl.*icon\" /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/*.js)",
       "Bash(grep -ao data-testid:collapsedControl[^}]* /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/main.1661a802.js)",
       "Bash(grep -o \"keyboard_double_arrow[^]*\\\\|material.symbols[^]*\\\\|material.*symbol\" /c/Users/ARUNDHATI/anaconda3/Lib/site-packages/streamlit/static/static/js/*.js)",
-      "Bash(C:/Users/ARUNDHATI/anaconda3/python.exe -c \"import streamlit; print\\(streamlit.__version__\\)\")"
+      "Bash(C:/Users/ARUNDHATI/anaconda3/python.exe -c \"import streamlit; print\\(streamlit.__version__\\)\")",
+      "Bash(python3 -c \":*)"
     ]
   }
 }
