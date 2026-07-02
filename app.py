@@ -119,6 +119,8 @@ def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> 
     queries = _build_queries(location)
     queries.extend(_build_regional_queries(district, state))
     for outlet in (selected_outlets or []):
+        if outlet in _KANNADA_OUTLET_NAMES:
+            continue  # Kannada outlets are fetched via NewsData.io, not RSS site filters
         domain = OUTLET_DOMAINS.get(outlet)
         if domain:
             queries.extend(_build_outlet_queries(location, domain))
@@ -132,6 +134,8 @@ def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> 
     state_queries = _build_queries(state)
     state_queries.extend(_build_regional_queries(district, state))
     for outlet in (selected_outlets or []):
+        if outlet in _KANNADA_OUTLET_NAMES:
+            continue
         domain = OUTLET_DOMAINS.get(outlet)
         if domain:
             state_queries.extend(_build_outlet_queries(state, domain))
@@ -271,99 +275,70 @@ def entries_to_dicts(entries: list, channel: str = "rss") -> list:
     return dicts
 
 
-def _fetch_newsdata_one_domain(domain: str, district: str, state: str, api_key: str, language: str) -> tuple:
-    """Fetch NewsData.io articles for a single domain.
-    Returns (articles, last_error_str) where last_error_str is '' on full success.
+
+
+_KANNADA_OUTLET_NAMES = {
+    "Vijaya Karnataka", "Prajavani", "Udayavani", "Kannada Prabha", "TV9 Kannada",
+}
+
+
+@st.cache_data(ttl=1800)
+def fetch_newsdata_kannada(district: str, state: str, api_key: str) -> list:
+    """Fetch Kannada-language news from NewsData.io with a single call (no domainurl).
+    Returns a list of ranker-compatible dicts with source_channel='newsdata'.
+    Cached for 30 minutes per district/state combination.
     """
-    location  = f"{district} {state}"
-    base_url  = "https://newsdata.io/api/1/latest"
-    articles  = []
-    last_error = ""
-    for q in (f"{location} politics", f"{location} election BJP Congress MLA minister"):
-        params = {
-            "apikey":    api_key,
-            "q":         q,
-            "country":   "in",
-            "language":  language,
-            "category":  "politics",
-            "domainurl": domain,
-        }
-        url = base_url + "?" + urllib.parse.urlencode(params)
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "PolitiScan/1.1"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                http_status = resp.status
-                raw_body    = resp.read()
-            data = json.loads(raw_body.decode())
-            if data.get("status") == "success":
-                for item in data.get("results", []):
-                    articles.append({
-                        "headline":       item.get("title", ""),
-                        "snippet":        (item.get("description") or item.get("content") or "")[:600],
-                        "source_name":    item.get("source_id", "Unknown"),
-                        "published_iso":  item.get("pubDate", ""),
-                        "url":            item.get("link", ""),
-                        "source_channel": "newsdata",
-                    })
-            else:
-                last_error = f"HTTP {http_status} | status={data.get('status')!r} | {raw_body.decode()[:200]}"
-        except Exception as _exc:
-            last_error = f"Exception: {_exc}"
-    return articles, last_error
+    if not api_key:
+        return []
 
-
-def fetch_newsdata_articles(district: str, state: str, domains: list, api_key: str, language: str = "en") -> tuple:
-    """Fetch recent articles from NewsData.io for each domain in parallel.
-    Each domain gets its own API call so a missing domain doesn't silence others.
-    Returns (articles, domain_counts) where domain_counts = {domain: raw_article_count}.
-    """
-    if not api_key or not domains:
-        return [], {}
-
-    per_domain: list = [([], "") for _ in domains]   # (articles, error_str) per domain
-
-    def _worker(idx: int, dom: str):
-        per_domain[idx] = _fetch_newsdata_one_domain(dom, district, state, api_key, language)
-
-    threads = [threading.Thread(target=_worker, args=(i, d), daemon=True) for i, d in enumerate(domains)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    domain_counts = {}   # {domain: {"count": n, "error": str}}
-    for dom, (arts, err) in zip(domains, per_domain):
-        domain_counts[dom] = {"count": len(arts), "error": err}
-        print(f"  [NewsData] {dom} -> {len(arts)} articles  (lang={language})"
-              + (f"  ERROR: {err}" if err else ""))
-
-    all_articles = [art for (arts, _err) in per_domain for art in arts]
-
-    from collections import Counter as _Counter
-    _src_counts = _Counter(a.get("source_name", "?") for a in all_articles)
-    print(f"  [ND COMBINED] Total NewsData articles before dedup: {len(all_articles)}")
-    print(f"  [ND COMBINED] Sources: {dict(_src_counts)}")
+    params = urllib.parse.urlencode({
+        "apikey":   api_key,
+        "q":        f"{district} {state} politics",
+        "country":  "in",
+        "language": "kn,en",
+        "page":     "1",
+    })
+    url = f"https://newsdata.io/api/1/news?{params}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "PolitiScan/1.3"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception as e:
+        import sys
+        print(f"[NewsData Kannada] fetch error: {e}", file=sys.stderr)
+        return []
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
-    recent = []
-    for art in all_articles:
+    seen: set = set()
+    articles = []
+    for item in data.get("results", []):
+        url_link = item.get("link", "")
+        if url_link and url_link in seen:
+            continue
+        if url_link:
+            seen.add(url_link)
+
+        pub_str = item.get("pubDate", "")
         try:
-            pub = datetime.fromisoformat(art["published_iso"].replace(" ", "T").replace("Z", "+00:00"))
+            pub = datetime.fromisoformat(pub_str.replace(" ", "T").replace("Z", "+00:00"))
             if pub.tzinfo is None:
                 pub = pub.replace(tzinfo=timezone.utc)
-            if pub >= cutoff:
-                recent.append(art)
+            if pub < cutoff:
+                continue
+            pub_iso = pub.isoformat()
         except Exception:
-            recent.append(art)   # keep if date unparseable
+            pub_iso = pub_str
 
-    seen: set = set()
-    unique = []
-    for art in recent:
-        if art["url"] and art["url"] not in seen:
-            seen.add(art["url"])
-            unique.append(art)
-
-    return unique, domain_counts
+        articles.append({
+            "headline":       item.get("title", ""),
+            "snippet":        (item.get("description") or "")[:600],
+            "full_content":   item.get("content") or item.get("description") or "",
+            "source_name":    item.get("source_id", "Unknown"),
+            "published_iso":  pub_iso,
+            "url":            url_link,
+            "source_channel": "newsdata",
+        })
+    return articles
 
 
 def deduplicate_dicts(articles: list, threshold: float = 0.70) -> list:
@@ -974,18 +949,9 @@ def _show_results():
         nd_total      = bd.get("newsdata_total", 0)
         outlet_counts = bd.get("outlet_counts", {})
 
-        kannada_nd_total = bd.get("kannada_nd_total", 0)
-        header_parts = []
-        if kannada_nd_total:
-            header_parts.append(f"**{kannada_nd_total}** from NewsData.io (Kannada outlets)")
-        if nd_total:
-            header_parts.append(f"**{nd_total}** from NewsData.io (primary)")
-        header_parts.append(f"**{rss_total}** from Google RSS (secondary)")
-
+        breakdown_line = f"**{nd_total}** from NewsData.io + **{rss_total}** from Google RSS"
         top_outlets = sorted(outlet_counts.items(), key=lambda x: -x[1])[:8]
         outlet_str  = "   ".join(f"**{k}:** {v}" for k, v in top_outlets)
-
-        breakdown_line = "   ".join(header_parts)
         if outlet_str:
             breakdown_line += "   \u2014   " + outlet_str
         st.caption(breakdown_line)
@@ -1270,7 +1236,7 @@ if scan_clicked:
     st.session_state.region_label = region_label
 
     rss_result = [None, None]
-    nd_result  = [[], 0, {}]   # [articles, kannada_nd_count, domain_counts]
+    nd_result  = [[]]   # [articles]
 
     def _rss_worker():
         entries, scope_val = fetch_all_feeds(district, state, tuple(active_outlets))
@@ -1286,36 +1252,44 @@ if scan_clicked:
                 _key = os.getenv("NEWSDATA_API_KEY", "")
             _key = (_key or "").strip()
 
-            # Kannada outlets are not in Google News RSS; route them through
-            # NewsData.io with language="kn,en" using confirmed working domains.
-            _KANNADA_ND_DOMAINS = {
-                "Vijaya Karnataka": "vijaykarnataka.com",
-                "Prajavani":        "prajavani.net",
-                "Udayavani":        "udayavani.com",
-                "Kannada Prabha":   "kannadaprabha.com",
-                "TV9 Kannada":      "tv9kannada.com",
-            }
-
             if active_outlets:
-                _kannada_selected = [o for o in active_outlets if o in _KANNADA_ND_DOMAINS]
-                _other_selected   = [o for o in active_outlets if o not in _KANNADA_ND_DOMAINS]
+                _kannada_selected = [o for o in active_outlets if o in _KANNADA_OUTLET_NAMES]
+                _other_selected   = [o for o in active_outlets if o not in _KANNADA_OUTLET_NAMES]
 
                 _all_nd = []
 
-                # Kannada outlets → NewsData.io with kn,en language
+                # Kannada outlets → ONE NewsData.io call, no domainurl, filter post-fetch
                 if _kannada_selected:
-                    _kn_domains = [_KANNADA_ND_DOMAINS[o] for o in _kannada_selected]
-                    _kn_arts, _kn_counts = fetch_newsdata_articles(district, state, _kn_domains, _key, language="kn,en")
-                    nd_result[1] = len(_kn_arts)   # store Kannada ND count separately
-                    nd_result[2].update(_kn_counts) # store per-domain counts for UI debug
-                    _all_nd.extend(_kn_arts)
+                    _kn_arts_raw = fetch_newsdata_kannada(district, state, _key)
 
-                # Non-Kannada outlets → NewsData.io with en language (existing behaviour)
+                    # Build domain-prefix and full-domain sets for matching source_id
+                    _kn_domain_prefixes: set = set()
+                    _kn_domains_full:    set = set()
+                    for _outlet in _kannada_selected:
+                        _dom = OUTLET_DOMAINS.get(_outlet, "")
+                        if _dom:
+                            _kn_domain_prefixes.add(_dom.split(".")[0].lower())
+                            _kn_domains_full.add(_dom.lower())
+                    _kn_names_lower = {o.lower() for o in _kannada_selected}
+
+                    def _nd_matches_kannada(art):
+                        src = (art.get("source_name") or "").lower().strip()
+                        if src in _kn_domain_prefixes or src in _kn_names_lower:
+                            return True
+                        try:
+                            host = urllib.parse.urlparse(art.get("url") or "").netloc.lower()
+                            host = host.replace("www.", "")
+                            if host in _kn_domains_full:
+                                return True
+                        except Exception:
+                            pass
+                        return False
+
+                    _all_nd.extend(a for a in _kn_arts_raw if _nd_matches_kannada(a))
+
+                # Non-Kannada outlets → primary fetch (domainurl not available on this plan)
                 if _other_selected:
-                    _en_domains = [d for d in (OUTLET_DOMAINS.get(o) for o in _other_selected) if d]
-                    if _en_domains:
-                        _en_arts, _ = fetch_newsdata_articles(district, state, _en_domains, _key)
-                        _all_nd.extend(_en_arts)
+                    _all_nd.extend(fetch_newsdata_primary(district, state, _key))
 
                 nd_result[0] = _all_nd
             else:
@@ -1330,11 +1304,9 @@ if scan_clicked:
         t_rss.start(); t_nd.start()
         t_rss.join();  t_nd.join()
 
-    raw_entries      = rss_result[0] or []
-    scope            = rss_result[1] or "district"
-    newsdata_dicts   = nd_result[0] or []
-    kannada_nd_count = nd_result[1] or 0
-    nd_domain_counts = nd_result[2] or {}    # {domain: raw_count} from Kannada fetch
+    raw_entries    = rss_result[0] or []
+    scope          = rss_result[1] or "district"
+    newsdata_dicts = nd_result[0] or []
 
     recent, _  = filter_recent(raw_entries, hours=36)
     unique_rss = deduplicate(recent, threshold=0.70)
@@ -1450,33 +1422,6 @@ if scan_clicked:
     print(f"[PIPELINE] newsdata_dicts length (raw from _nd_worker): {len(newsdata_dicts)}")
     print(f"[PIPELINE] Combined article_dicts total: {len(article_dicts)}")
 
-    # --- TEMPORARY DEBUG UI (remove after Kannada outlet investigation) ---
-    _KANNADA_ND_OUTLET_NAMES = {"Vijaya Karnataka", "Prajavani", "Udayavani", "Kannada Prabha", "TV9 Kannada"}
-    if active_outlets and any(o in _KANNADA_ND_OUTLET_NAMES for o in active_outlets):
-        try:
-            _dbg_nd_key = st.secrets["NEWSDATA_API_KEY"]
-        except Exception:
-            _dbg_nd_key = os.getenv("NEWSDATA_API_KEY", "")
-        _dbg_nd_key = (_dbg_nd_key or "").strip()
-        st.warning(
-            "**DEBUG — NewsData fetch results:**\n\n"
-            + "".join(
-                f"- {dom}: **{nd_domain_counts.get(dom, {}).get('count', 0)}** articles"
-                + (f" | Error: `{nd_domain_counts.get(dom, {}).get('error', '')[:200]}`"
-                   if nd_domain_counts.get(dom, {}).get("error") else "")
-                + "\n"
-                for dom in ("vijaykarnataka.com", "prajavani.net", "udayavani.com",
-                            "tv9kannada.com", "kannadaprabha.com")
-            )
-            + f"- Total NewsData (raw): **{sum(v.get('count',0) for v in nd_domain_counts.values())}**  |  "
-            f"after dedup: **{nd_count}**\n"
-            f"- Total RSS (after outlet filter): **{rss_total}**\n"
-            f"- Combined (RSS + NewsData): **{len(article_dicts)}**\n\n"
-            f"**API key check:**\n"
-            f"- NEWSDATA_API_KEY present: **{bool(_dbg_nd_key)}**\n"
-            f"- NEWSDATA_API_KEY first 8 chars: `{_dbg_nd_key[:8]}`"
-        )
-    # --- END TEMPORARY DEBUG UI ---
 
     if not article_dicts and active_outlets:
         st.warning(
@@ -1493,10 +1438,9 @@ if scan_clicked:
         )
 
         st.session_state.source_breakdown = {
-            "rss_total":        rss_total,
-            "newsdata_total":   nd_count,
-            "kannada_nd_total": kannada_nd_count,
-            "outlet_counts":    dict(outlet_counts),
+            "rss_total":      rss_total,
+            "newsdata_total": nd_count,
+            "outlet_counts":  dict(outlet_counts),
         }
 
         pre_dedup_count = len(article_dicts)
@@ -1655,10 +1599,7 @@ if scan_clicked:
         print(f"  After ranking (political filter):  {len(ranked)}")
         print(f"  Shortlist (>= {SHORTLIST_THRESHOLD} or top-10 fallback): {len(st.session_state.shortlist_articles)}")
 
-        if active_outlets:
-            filter_note = f"  {pre_dedup_count} articles after outlet filter (from {total_fetched} total fetched)."
-        else:
-            filter_note = f"  {total_fetched} total fetched — {nd_count} from NewsData.io, {rss_total} from Google RSS."
+        filter_note = f"  {nd_count} from NewsData.io + {rss_total} from Google RSS."
         caption = (
             f"**{len(ranked)} political articles ranked**{scope_note}.  "
             f"{dupes_merged} duplicates merged from {pre_dedup_count} candidates.{filter_note}"
