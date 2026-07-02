@@ -27,6 +27,19 @@ from fpdf.enums import XPos, YPos
 from regions import REGIONS, KANNADA_DISTRICTS, STATE_REGIONAL_QUERIES
 from outlets import STATE_OUTLETS, OUTLET_DOMAINS
 from ranker import rank_articles
+
+# ---------------------------------------------------------------------------
+# NewsData.io debug logger — writes timestamped entries to newsdata_debug.log
+# ---------------------------------------------------------------------------
+import logging
+import traceback as _traceback
+
+_nd_logger = logging.getLogger("newsdata_debug")
+_nd_logger.setLevel(logging.DEBUG)
+if not _nd_logger.handlers:
+    _nd_fh = logging.FileHandler("newsdata_debug.log", encoding="utf-8")
+    _nd_fh.setFormatter(logging.Formatter("%(asctime)s  %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+    _nd_logger.addHandler(_nd_fh)
 from deduplicator import deduplicate_all
 from translation import process_article
 from pdf_handler import fetch_article_content
@@ -291,19 +304,36 @@ def fetch_newsdata_kannada(district: str, state: str, api_key: str) -> list:
     if not api_key:
         return []
 
-    params = urllib.parse.urlencode({
+    params_dict = {
         "apikey":   api_key,
         "q":        f"{district} {state} politics",
         "country":  "in",
         "language": "kn,en",
         "page":     "1",
-    })
+    }
+    params = urllib.parse.urlencode(params_dict)
     url = f"https://newsdata.io/api/1/news?{params}"
+    _nd_logger.debug(
+        "[KANNADA] REQUEST  url=%s  params(no key)=%s",
+        url.split("?")[0],
+        {k: v for k, v in params_dict.items() if k != "apikey"},
+    )
+    _t0 = time.time()
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "PolitiScan/1.3"})
         with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
+            _status = resp.status
+            _raw    = resp.read()
+        _elapsed = time.time() - _t0
+        _nd_logger.debug("[KANNADA] RESPONSE http_status=%s  elapsed=%.2fs  body_bytes=%d", _status, _elapsed, len(_raw))
+        _nd_logger.debug("[KANNADA] BODY %s", _raw.decode(errors="replace")[:2000])
+        data = json.loads(_raw.decode())
     except Exception as e:
+        _elapsed = time.time() - _t0
+        _nd_logger.error(
+            "[KANNADA] EXCEPTION after %.2fs  type=%s  msg=%s\n%s",
+            _elapsed, type(e).__name__, e, _traceback.format_exc(),
+        )
         import sys
         print(f"[NewsData Kannada] fetch error: {e}", file=sys.stderr)
         return []
@@ -338,6 +368,7 @@ def fetch_newsdata_kannada(district: str, state: str, api_key: str) -> list:
             "url":            url_link,
             "source_channel": "newsdata",
         })
+    _nd_logger.debug("[KANNADA] PARSED  %d articles after date filter (raw results=%d)", len(articles), len(data.get("results", [])))
     return articles
 
 
@@ -365,17 +396,34 @@ def fetch_newsdata_primary(district: str, state: str, api_key: str) -> list:
     if not api_key:
         return []
 
-    base_params = urllib.parse.urlencode({
+    base_params_dict = {
         "apikey":   api_key,
         "q":        f"{district} {state} politics",
         "country":  "in",
-    })
+    }
+    base_params = urllib.parse.urlencode(base_params_dict)
     url = f"https://newsdata.io/api/1/news?{base_params}&language=en,hi"
+    _nd_logger.debug(
+        "[PRIMARY] REQUEST  url=%s  params(no key)=%s",
+        url.split("?")[0],
+        {k: v for k, v in base_params_dict.items() if k != "apikey"},
+    )
+    _t0 = time.time()
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "PolitiScan/1.3"})
         with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
+            _status = resp.status
+            _raw    = resp.read()
+        _elapsed = time.time() - _t0
+        _nd_logger.debug("[PRIMARY] RESPONSE http_status=%s  elapsed=%.2fs  body_bytes=%d", _status, _elapsed, len(_raw))
+        _nd_logger.debug("[PRIMARY] BODY %s", _raw.decode(errors="replace")[:2000])
+        data = json.loads(_raw.decode())
     except Exception as e:
+        _elapsed = time.time() - _t0
+        _nd_logger.error(
+            "[PRIMARY] EXCEPTION after %.2fs  type=%s  msg=%s\n%s",
+            _elapsed, type(e).__name__, e, _traceback.format_exc(),
+        )
         import sys
         print(f"[NewsData] fetch error: {e}", file=sys.stderr)
         return []
@@ -411,6 +459,7 @@ def fetch_newsdata_primary(district: str, state: str, api_key: str) -> list:
             "url":            url_link,
             "source_channel": "newsdata",
         })
+    _nd_logger.debug("[PRIMARY] PARSED  %d articles after date filter (raw results=%d)", len(articles), len(data.get("results", [])))
     return articles
 
 
@@ -1219,6 +1268,19 @@ with st.sidebar:
                 if chosen:
                     for src in chosen.get("_sources_list", []):
                         st.markdown(f"- {src}")
+
+        st.divider()
+        with st.expander("Diagnostics (NewsData.io)"):
+            _log_path = os.path.join(os.path.dirname(__file__), "newsdata_debug.log")
+            try:
+                with open(_log_path, "r", encoding="utf-8", errors="replace") as _lf:
+                    _log_lines = _lf.readlines()
+                _last20 = "".join(_log_lines[-20:]) if _log_lines else "(log file is empty)"
+            except FileNotFoundError:
+                _last20 = "(newsdata_debug.log not found — no NewsData.io call has been made yet)"
+            except Exception as _le:
+                _last20 = f"(could not read log: {_le})"
+            st.text_area("Last 20 log lines", value=_last20, height=300, label_visibility="collapsed")
 
 
 # ---------------------------------------------------------------------------
