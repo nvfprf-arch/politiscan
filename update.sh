@@ -29,6 +29,12 @@ echo " PolitiScan — updating to latest code"
 echo "======================================================================"
 
 # ---------------------------------------------------------------------------
+# Snapshot requirements.txt before pulling
+# ---------------------------------------------------------------------------
+REQS_FILE="$INSTALL_DIR/requirements.txt"
+HASH_BEFORE=$(md5sum "$REQS_FILE" | awk '{print $1}')
+
+# ---------------------------------------------------------------------------
 # Pull latest code from GitHub
 # ---------------------------------------------------------------------------
 echo ""
@@ -39,12 +45,19 @@ git -C "$INSTALL_DIR" pull --ff-only
 echo "  Code updated."
 
 # ---------------------------------------------------------------------------
-# Install any new or changed Python requirements
+# Install Python requirements only if requirements.txt changed
 # ---------------------------------------------------------------------------
 echo ""
 echo "[2/3] Syncing Python dependencies..."
 
-"$VENV_DIR/bin/pip" install --upgrade -r "$INSTALL_DIR/requirements.txt"
+HASH_AFTER=$(md5sum "$REQS_FILE" | awk '{print $1}')
+
+if [[ "$HASH_BEFORE" != "$HASH_AFTER" ]]; then
+    echo "  Dependencies changed, installing..."
+    "$VENV_DIR/bin/pip" install -r "$INSTALL_DIR/requirements.txt" --extra-index-url https://download.pytorch.org/whl/cpu
+else
+    echo "  Dependencies unchanged, skipping pip install."
+fi
 
 # Re-apply ownership in case new files were added by git pull
 chown -R www-data:www-data "$INSTALL_DIR"
