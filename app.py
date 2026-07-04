@@ -1602,6 +1602,56 @@ if scan_clicked:
     # normalize_source() strips protocol, www., and '- Google News' suffixes so that
     # source tags like "Vijaya Karnataka - vijaykarnataka.com" match correctly.
     if active_outlets:
+
+        # ── PRE-FILTER DIAGNOSTIC (Debug Mode only) ───────────────────────────
+        # Shows the exact values the filter will compare, and the raw/normalized
+        # source_name + URL for every non-Udayavani article, so we can see
+        # precisely why Kannada Prabha / Prajavani / VK / TV9 Kannada are failing.
+        if debug_mode:
+            # 1) Print the exact match targets the filter uses
+            _mt_lines = ["Outlet filter match targets (name → name_norm | domain → domain_norm):"]
+            for _oname, _odomain in _active_outlet_domains.items():
+                _oname_norm  = normalize_source(_oname)
+                _odomain_norm = normalize_source(_odomain)
+                _mt_lines.append(
+                    f"  {_oname!r:28s} → norm={_oname_norm!r:28s} | "
+                    f"domain={_odomain!r:28s} → norm={_odomain_norm!r}"
+                )
+            _mt_text = "\n".join(_mt_lines)
+            print(f"\n[PRE-FILTER DIAG]\n{_mt_text}")
+            st.sidebar.markdown("**[Pre-filter] Outlet match targets**")
+            st.sidebar.code(_mt_text)
+
+            # 2) For every non-Udayavani article, show raw and normalized values
+            _non_udaya = [
+                a for a in rss_dicts
+                if "udayavani" not in (a.get("source_name") or "").lower()
+            ]
+            _pe_lines = [f"Non-Udayavani articles entering filter ({len(_non_udaya)} total):"]
+            for _a in _non_udaya:
+                _src_raw = _a.get("source_name") or ""
+                _url_raw = _a.get("url") or ""
+                try:
+                    _host_raw = urllib.parse.urlparse(_url_raw).netloc
+                except Exception:
+                    _host_raw = ""
+                _src_norm  = normalize_source(_src_raw)
+                _host_norm = normalize_source(_host_raw)
+                _pe_lines.append(
+                    f"  source_name_raw = {_src_raw!r}\n"
+                    f"    source_norm   = {_src_norm!r}\n"
+                    f"    url           = {_url_raw[:100]}\n"
+                    f"    host_raw      = {_host_raw!r}\n"
+                    f"    host_norm     = {_host_norm!r}"
+                )
+            _pe_text = "\n".join(_pe_lines)
+            print(f"[PRE-FILTER DIAG]\n{_pe_text}")
+            st.sidebar.markdown(
+                f"**[Pre-filter] Non-Udayavani articles ({len(_non_udaya)}) — raw vs normalized**"
+            )
+            st.sidebar.code(_pe_text)
+        # ── END PRE-FILTER DIAGNOSTIC ─────────────────────────────────────────
+
         def _rss_matches_outlet(art):
             src_norm = normalize_source(art.get("source_name") or "")
             try:
