@@ -25,7 +25,7 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
 from regions import REGIONS, KANNADA_DISTRICTS, STATE_REGIONAL_QUERIES
-from outlets import STATE_OUTLETS, OUTLET_DOMAINS
+from outlets import STATE_OUTLETS, OUTLET_DOMAINS, NATIVE_RSS_FEEDS
 from ranker import rank_articles
 
 # ---------------------------------------------------------------------------
@@ -139,35 +139,67 @@ def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> 
     """
     location = f"{district} {state}"
 
-    # Outlet (name, domain) pairs for site-restricted queries
-    outlet_pairs = [
+    # Split selected outlets into native-feed vs Google site-restricted groups.
+    # Outlets in NATIVE_RSS_FEEDS are fetched directly; all others use site: queries.
+    _selected = list(selected_outlets or [])
+    native_pairs = [
+        (o, NATIVE_RSS_FEEDS[o])
+        for o in _selected
+        if o in NATIVE_RSS_FEEDS
+    ]
+    site_pairs = [
         (o, OUTLET_DOMAINS[o])
-        for o in (selected_outlets or [])
-        if OUTLET_DOMAINS.get(o)
+        for o in _selected
+        if o not in NATIVE_RSS_FEEDS and OUTLET_DOMAINS.get(o)
     ]
 
-    # General queries (unchanged behaviour)
+    # ── Fetch native RSS feeds in parallel ───────────────────────────────────
+    native_entries: list = []
+    native_counts: dict[str, dict] = {}
+    if native_pairs:
+        _native_raw: list = [None] * len(native_pairs)
+        _native_threads = [
+            threading.Thread(target=fetch_feed, args=(url, _native_raw, i))
+            for i, (_, url) in enumerate(native_pairs)
+        ]
+        for _t in _native_threads:
+            _t.start()
+        for _t in _native_threads:
+            _t.join()
+        for (outlet_name, _url), entries in zip(native_pairs, _native_raw):
+            entries = entries or []
+            # Tag each entry so get_outlet() returns the canonical outlet name
+            for _e in entries:
+                _e["_forced_source"] = outlet_name
+            native_counts[outlet_name] = {"native": len(entries)}
+            native_entries.extend(entries)
+        print(f"\n[NATIVE-FEED] per-outlet raw counts:")
+        for _n, _c in native_counts.items():
+            print(f"  {_n}: native={_c['native']}")
+
+    # ── General queries (unchanged) ───────────────────────────────────────────
     general_queries = _build_queries(location)
     general_queries.extend(_build_regional_queries(district, state))
-
-    # Fetch general queries + per-outlet site queries concurrently.
-    # _run_feeds already parallelises internally; we call both helpers and merge.
     general_entries = _run_feeds(general_queries)
-    site_entries, outlet_site_counts = _fetch_outlet_site_entries(outlet_pairs, location)
 
-    combined = general_entries + site_entries
+    # ── Site-restricted queries for non-native outlets ────────────────────────
+    site_entries, outlet_site_counts = _fetch_outlet_site_entries(site_pairs, location)
+
+    all_outlet_counts = {**native_counts, **outlet_site_counts}
+    combined = general_entries + native_entries + site_entries
     recent, _ = filter_recent(combined, hours=36)
     if recent:
-        return combined, "district", outlet_site_counts
+        return combined, "district", all_outlet_counts
 
-    # Fallback: state-only queries
+    # ── Fallback: state-only queries ──────────────────────────────────────────
     state_queries = _build_queries(state)
     state_queries.extend(_build_regional_queries(district, state))
     state_general_entries = _run_feeds(state_queries)
-    state_site_entries, state_outlet_counts = _fetch_outlet_site_entries(outlet_pairs, state)
+    state_site_entries, state_site_counts = _fetch_outlet_site_entries(site_pairs, state)
 
-    combined_state = state_general_entries + state_site_entries
-    return combined_state, "state", state_outlet_counts
+    state_all_outlet_counts = {**native_counts, **state_site_counts}
+    combined_state = state_general_entries + native_entries + state_site_entries
+    return combined_state, "state", state_all_outlet_counts
 
 
 def parse_published(entry) -> datetime | None:
@@ -246,6 +278,10 @@ def normalize_source(s: str) -> str:
 def get_outlet(entry) -> str:
     """Extract news outlet name from feed entry source or link.
 
+    Priority 0: _forced_source — set on native RSS feed entries at fetch time
+    to guarantee the canonical outlet name regardless of what the feed's own
+    metadata says.
+
     Priority 1: RSS <source> tag — Google News always sets the real publisher
     name here (e.g. 'NDTV', 'The Indian Express'). Feedparser exposes this as
     entry.source, a FeedParserDict.  Try both .get() and attribute access, and
@@ -255,6 +291,12 @@ def get_outlet(entry) -> str:
     For news.google.com redirect URLs we return 'Unknown' rather than a misleading
     'Google News', so the outlet filter can never accidentally match it.
     """
+    # Native feed override — set explicitly at fetch time
+    if hasattr(entry, "get"):
+        forced = entry.get("_forced_source")
+        if forced:
+            return str(forced)
+
     source = getattr(entry, "source", None)
     if source:
         title = None
@@ -1697,28 +1739,35 @@ if scan_clicked:
         st.sidebar.code("\n".join(_nd_raw_sources) or "(none)")
         st.sidebar.markdown("**Debug: outlet domains being filtered against**")
         st.sidebar.code("\n".join(_filter_domains) or "(none)")
-        # Per-outlet site-query breakdown
+        # Per-outlet fetch-method breakdown
         if outlet_site_counts:
             _breakdown_lines = []
             for _oname in active_outlets:
                 _counts = outlet_site_counts.get(_oname, {})
-                _site_en = _counts.get("site_en", 0)
-                _site_kn = _counts.get("site_kn", 0)
-                # Count how many rss_dicts entries match this outlet (general + site combined)
-                _odom = (_active_outlet_domains.get(_oname) or "").lower()
-                _oname_norm = normalize_source(_oname)
-                _total_matched = sum(
-                    1 for a in rss_dicts
-                    if _oname_norm in normalize_source(a.get("source_name") or "")
-                    or (_odom and _odom in normalize_source(a.get("source_name") or ""))
-                )
-                _general_est = max(0, _total_matched - _site_en - _site_kn)
-                _breakdown_lines.append(
-                    f"{_oname}: site_en={_site_en}  site_kn={_site_kn}  general≈{_general_est}"
-                )
-            st.sidebar.markdown("**Debug: per-outlet RSS query breakdown**")
+                if "native" in _counts:
+                    # This outlet was fetched from its own native RSS feed
+                    _native_n = _counts.get("native", 0)
+                    _breakdown_lines.append(
+                        f"{_oname}: native feed ({_native_n} entries fetched)"
+                    )
+                else:
+                    # This outlet used Google News site-restricted query
+                    _site_en = _counts.get("site_en", 0)
+                    _site_kn = _counts.get("site_kn", 0)
+                    _odom = (_active_outlet_domains.get(_oname) or "").lower()
+                    _oname_norm = normalize_source(_oname)
+                    _total_matched = sum(
+                        1 for a in rss_dicts
+                        if _oname_norm in normalize_source(a.get("source_name") or "")
+                        or (_odom and _odom in normalize_source(a.get("source_name") or ""))
+                    )
+                    _general_est = max(0, _total_matched - _site_en - _site_kn)
+                    _breakdown_lines.append(
+                        f"{_oname}: Google site-restricted  site_en={_site_en}  site_kn={_site_kn}  general≈{_general_est}"
+                    )
+            st.sidebar.markdown("**Debug: per-outlet fetch method & raw counts**")
             st.sidebar.code("\n".join(_breakdown_lines))
-            print(f"\n[DEBUG MODE] Per-outlet site-query breakdown:")
+            print(f"\n[DEBUG MODE] Per-outlet fetch-method breakdown:")
             for _line in _breakdown_lines:
                 print(f"  {_line}")
         print(f"\n[DEBUG MODE] RSS raw sources ({len(_rss_raw_sources)}): {_rss_raw_sources}")

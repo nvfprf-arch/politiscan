@@ -342,3 +342,12 @@ OUTLET_DOMAINS: dict[str, str] = {}
 for _outlets in STATE_OUTLETS.values():
     for _o in _outlets:
         OUTLET_DOMAINS[_o["name"]] = _o["domain"]
+
+# Outlets with a direct native RSS feed URL.
+# These are fetched from the source directly instead of via Google News site: query.
+NATIVE_RSS_FEEDS: dict[str, str] = {
+    "Prajavani":        "https://www.prajavani.net/stories.rss",
+    "TV9 Kannada":      "https://tv9kannada.com/feed",
+    "Vijaya Karnataka": "https://vijaykarnataka.com/rssfeedsdefault.cms",
+    "Kannada Prabha":   "https://www.kannadaprabha.com/feed",
+}
