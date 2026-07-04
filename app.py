@@ -132,8 +132,6 @@ def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> 
     queries = _build_queries(location)
     queries.extend(_build_regional_queries(district, state))
     for outlet in (selected_outlets or []):
-        if outlet in _KANNADA_OUTLET_NAMES:
-            continue  # Kannada outlets are fetched via NewsData.io, not RSS site filters
         domain = OUTLET_DOMAINS.get(outlet)
         if domain:
             queries.extend(_build_outlet_queries(location, domain))
@@ -147,8 +145,6 @@ def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> 
     state_queries = _build_queries(state)
     state_queries.extend(_build_regional_queries(district, state))
     for outlet in (selected_outlets or []):
-        if outlet in _KANNADA_OUTLET_NAMES:
-            continue
         domain = OUTLET_DOMAINS.get(outlet)
         if domain:
             state_queries.extend(_build_outlet_queries(state, domain))
@@ -199,6 +195,35 @@ def deduplicate(entries: list, threshold: float = 0.70) -> list:
         if not duplicate:
             unique.append(entry)
     return unique
+
+
+def normalize_source(s: str) -> str:
+    """Normalize a source name or URL to a comparable lowercase form.
+
+    Strips HTTP protocol, www. prefix, and ' - Google News' suffixes so that
+    strings like 'Vijaya Karnataka - vijaykarnataka.com' or
+    'https://www.prajavani.net' can be compared against plain display names
+    and bare domains.
+    """
+    if not s:
+        return ""
+    s = s.strip().lower()
+    # Remove Google News attribution suffixes
+    for suffix in (" - google news", "- google news", " | google news"):
+        if s.endswith(suffix):
+            s = s[: -len(suffix)].strip()
+    # If it looks like a full URL, extract just the host
+    if s.startswith(("http://", "https://")):
+        try:
+            host = urllib.parse.urlparse(s).netloc
+            if host:
+                s = host
+        except Exception:
+            pass
+    # Strip www. prefix
+    if s.startswith("www."):
+        s = s[4:]
+    return s
 
 
 def get_outlet(entry) -> str:
@@ -1205,7 +1230,7 @@ with st.sidebar:
     state    = st.selectbox("State / UT", sorted(REGIONS.keys()))
     district = st.selectbox("District", REGIONS[state])
 
-    state_outlet_options = ["All Outlets"] + STATE_OUTLETS.get(state, [])
+    state_outlet_options = ["All Outlets"] + [o["name"] for o in STATE_OUTLETS.get(state, [])]
 
     # Reset outlet selection when state changes
     if st.session_state.get("_outlets_for_state") != state:
@@ -1229,6 +1254,7 @@ with st.sidebar:
     active_outlets = [] if selected_outlets == ["All Outlets"] else [o for o in selected_outlets if o != "All Outlets"]
 
     scan_clicked = st.button("Scan News", type="primary", use_container_width=True)
+    debug_mode = st.checkbox("Debug Mode", value=False, help="Show raw source names from RSS/NewsData and filter details")
 
     # Story Sources — only shown when results are available
     if "results_rows" in st.session_state and st.session_state.results_rows:
@@ -1391,83 +1417,76 @@ if scan_clicked:
 
     _rss_dicts_unfiltered = list(rss_dicts)   # snapshot before outlet filter
 
-    # Filter RSS results by selected outlets (source name or domain match)
+    # Build a name→domain map for the active outlet selection.
+    # Domains come from the "domain" field baked into STATE_OUTLETS (via OUTLET_DOMAINS).
+    _active_outlet_domains: dict[str, str] = {
+        o: (OUTLET_DOMAINS.get(o) or "").lower()
+        for o in active_outlets
+    }
+
+    # Debug Mode: show what raw sources arrived vs what we're filtering against.
+    if debug_mode and active_outlets:
+        _rss_raw_sources = sorted({a.get("source_name", "") for a in rss_dicts if a.get("source_name")})
+        _nd_raw_sources  = sorted({a.get("source_name", "") for a in newsdata_dicts if a.get("source_name")})
+        _filter_domains  = sorted(_active_outlet_domains.values())
+        st.sidebar.markdown("**Debug: RSS raw source names**")
+        st.sidebar.code("\n".join(_rss_raw_sources) or "(none)")
+        st.sidebar.markdown("**Debug: NewsData raw source_ids**")
+        st.sidebar.code("\n".join(_nd_raw_sources) or "(none)")
+        st.sidebar.markdown("**Debug: outlet domains being filtered against**")
+        st.sidebar.code("\n".join(_filter_domains) or "(none)")
+        print(f"\n[DEBUG MODE] RSS raw sources ({len(_rss_raw_sources)}): {_rss_raw_sources}")
+        print(f"[DEBUG MODE] NewsData raw sources ({len(_nd_raw_sources)}): {_nd_raw_sources}")
+        print(f"[DEBUG MODE] Filter domains: {_filter_domains}")
+
+    # Filter RSS results by selected outlets using normalized domain/name matching.
+    # normalize_source() strips protocol, www., and '- Google News' suffixes so that
+    # source tags like "Vijaya Karnataka - vijaykarnataka.com" match correctly.
     if active_outlets:
-        _outlet_names_lower = [o.lower() for o in active_outlets]
-        _outlet_domains_map = {o: (OUTLET_DOMAINS.get(o) or "").lower() for o in active_outlets}
-
-        # Kannada outlets need looser matching because Google News may label them
-        # inconsistently. Map each Kannada outlet name to known URL substrings.
-        _KANNADA_URL_FRAGMENTS = {
-            "vijaya karnataka": ["vijaykarnataka.com"],
-            "prajavani":        ["prajavani.net"],
-            "udayavani":        ["udayavani.com"],
-            "kannada prabha":   ["kannadaprabha.com"],
-        }
-        _active_kannada = {k: v for k, v in _KANNADA_URL_FRAGMENTS.items()
-                           if k in _outlet_names_lower}
-
         def _rss_matches_outlet(art):
-            src = (art.get("source_name") or "").lower().strip()
-            url_host = ""
+            src_norm = normalize_source(art.get("source_name") or "")
             try:
-                url_host = urllib.parse.urlparse(art.get("url") or "").netloc.lower()
+                url_host_norm = normalize_source(
+                    urllib.parse.urlparse(art.get("url") or "").netloc
+                )
             except Exception:
-                pass
+                url_host_norm = ""
 
-            # Name match: exact, or source has a leading "The " ("Indian Express" → "The Indian Express").
-            # Avoids false positives like "NDTV" matching "NDTV Food".
-            for name in _outlet_names_lower:
-                if src == name or src == "the " + name:
+            for outlet_name, domain in _active_outlet_domains.items():
+                name_norm = normalize_source(outlet_name)
+
+                # Exact normalized name match, or with leading "The " prefix
+                if src_norm == name_norm or src_norm == "the " + name_norm:
                     return True
 
-            # Domain match: exact hostname only (www. prefix allowed).
-            # Avoids subdomains like food.ndtv.com matching ndtv.com.
-            for domain in _outlet_domains_map.values():
-                if domain and (url_host == domain or url_host == "www." + domain):
+                # Outlet name appears as substring in source
+                # (handles "Vijaya Karnataka - vijaykarnataka.com" source tags)
+                if name_norm and name_norm in src_norm:
                     return True
 
-            # Kannada-outlet fallbacks (URL substring + headline suffix).
-            # Only runs when a Kannada outlet is in the selected set.
-            if _active_kannada:
-                headline = (art.get("headline") or "").lower()
-                for outlet_key, url_fragments in _active_kannada.items():
-                    # Fallback 1: URL host contains a known Kannada domain fragment
-                    if any(frag in url_host for frag in url_fragments):
-                        return True
-                    # Fallback 2: headline/title contains outlet name as substring
-                    # (Google RSS often appends "- Vijaya Karnataka" to titles)
-                    if outlet_key in headline:
-                        return True
+                # URL host matches outlet domain exactly (works for non-redirect URLs)
+                if domain and url_host_norm == domain:
+                    return True
+
+                # Source tag IS the domain (e.g. "vijaykarnataka.com")
+                if domain and src_norm == domain:
+                    return True
+
+                # Domain string appears in source tag
+                if domain and domain in src_norm:
+                    return True
 
             return False
 
         print(f"\n[DEBUG] Outlet filter — selected: {list(active_outlets)}")
-        print(f"  {'Keep':<6} {'Source name':<35} {'URL host':<35} {'Match reason'}")
+        print(f"  {'Keep':<6} {'Source name (raw)':<38} {'Normalized':<30} {'Match?'}")
         _kept, _dropped = [], []
         for _a in rss_dicts:
-            _src  = (_a.get("source_name") or "").lower()
-            try:
-                _host = urllib.parse.urlparse(_a.get("url") or "").netloc.lower()
-            except Exception:
-                _host = ""
-            _reason = ""
-            _pass = False
-            for _name in _outlet_names_lower:
-                if _name in _src or _src in _name:
-                    _reason = f"name '{_name}' ↔ src '{_src}'"
-                    _pass = True
-                    break
-            if not _pass:
-                for _oname, _dom in _outlet_domains_map.items():
-                    if _dom and _dom in _host:
-                        _reason = f"domain '{_dom}' in host '{_host}'"
-                        _pass = True
-                        break
-            if not _reason:
-                _reason = f"no match (src='{_src}', host='{_host}')"
+            _src_raw  = _a.get("source_name") or ""
+            _src_norm = normalize_source(_src_raw)
+            _pass = _rss_matches_outlet(_a)
             tag = "KEEP" if _pass else "DROP"
-            print(f"  {tag:<6} {(_a.get('source_name') or '')[:34]:<35} {_host[:34]:<35} {_reason}")
+            print(f"  {tag:<6} {_src_raw[:37]:<38} {_src_norm[:29]:<30} {_pass}")
             (_kept if _pass else _dropped).append(_a)
         print(f"  → {len(_kept)} kept, {len(_dropped)} dropped")
         rss_dicts = _kept
