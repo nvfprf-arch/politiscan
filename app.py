@@ -1506,41 +1506,105 @@ if scan_clicked:
         st.sidebar.markdown("**[1] Raw RSS entries (all fetched)**")
         st.sidebar.code(_t)
 
+    # ── BOILERPLATE FILTER ────────────────────────────────────────────────────
+    # Strip obvious non-article pages (Terms, Privacy Policy, Contact Us, etc.)
+    # that site-restricted RSS queries sometimes return for certain domains.
+    # Runs always (not just in Debug Mode) so real articles are counted correctly.
+    _BOILERPLATE_PATTERNS = frozenset({
+        "terms & conditions", "terms and conditions", "terms of service",
+        "privacy policy", "contact us", "about us", "cookie policy",
+        "disclaimer", "advertise with us",
+    })
+    _active_outlet_names_lower = {o.lower() for o in (active_outlets or [])}
+
+    def _is_boilerplate_entry(entry) -> bool:
+        title_lower = (getattr(entry, "title", "") or "").strip().lower()
+        if not title_lower:
+            return False
+        if any(pat in title_lower for pat in _BOILERPLATE_PATTERNS):
+            return True
+        # Title is nothing but the outlet's own display name with no real content
+        if title_lower in _active_outlet_names_lower:
+            return True
+        return False
+
+    _boilerplate_removed = [e for e in raw_entries if     _is_boilerplate_entry(e)]
+    raw_entries          = [e for e in raw_entries if not _is_boilerplate_entry(e)]
+
+    if debug_mode and _boilerplate_removed:
+        _bp_lines = [f"Boilerplate stripped ({len(_boilerplate_removed)} entries):"]
+        for _be in _boilerplate_removed:
+            _bp_lines.append(
+                f"  src={get_outlet(_be)!r:30s}  "
+                f"title={( getattr(_be, 'title', '') or '')[:80]!r}"
+            )
+        _bp_text = "\n".join(_bp_lines)
+        print(f"\n[BOILERPLATE FILTER]\n{_bp_text}")
+        st.sidebar.markdown(f"**[1b] Boilerplate removed ({len(_boilerplate_removed)})**")
+        st.sidebar.code(_bp_text)
+    # ── END BOILERPLATE FILTER ────────────────────────────────────────────────
+
     # ── PRE-RECENCY DIAGNOSTIC (Debug Mode only) ─────────────────────────────
-    # For every article from the 5 selected Kannada outlets, show the raw
-    # published string, the parsed datetime, and how many hours old it is
-    # relative to the 36h cutoff.  Grouped by outlet for easy comparison.
+    # For every article from the 5 Kannada outlets, show pub_raw / hours_old.
+    # Uses the same normalize_source() matching as the real Stage 5 outlet filter
+    # so attribution is consistent with what Stage 1 tally reports.
     if debug_mode:
         _now_utc   = datetime.now(timezone.utc)
         _cutoff_36 = _now_utc - timedelta(hours=36)
 
-        # Signals used to attribute a raw feedparser entry to an outlet.
-        # Keys must match the exact outlet display names used in the sidebar.
-        _outlet_signals: dict[str, tuple] = {
-            "Udayavani":          ("udayavani",),
-            "Prajavani":          ("prajavani",),
-            "Vijaya Karnataka":   ("vijaya karnataka", "vijayakarnataka"),
-            "Kannada Prabha":     ("kannada prabha",   "kannadaprabha"),
-            "TV9 Kannada":        ("tv9 kannada",       "tv9kannada"),
+        # Outlet→domain map, same source as Stage 5 (_active_outlet_domains).
+        # Restricted to the 5 Kannada outlets so other selected outlets don't
+        # add noise (Udayavani is the baseline; the others are the suspects).
+        _DIAG_KANNADA = {
+            "Udayavani", "Prajavani", "Vijaya Karnataka",
+            "Kannada Prabha", "Kannada Prabha Online", "TV9 Kannada",
+        }
+        _diag_outlet_map = {
+            o: (OUTLET_DOMAINS.get(o) or "").lower()
+            for o in active_outlets
+            if o in _DIAG_KANNADA
         }
 
-        # Bucket raw entries by outlet (first signal match wins)
-        _outlet_buckets: dict[str, list] = {k: [] for k in _outlet_signals}
-        for _e in raw_entries:
-            _src_lower = get_outlet(_e).lower()
-            for _oname, _sigs in _outlet_signals.items():
-                if any(sig in _src_lower for sig in _sigs):
-                    _outlet_buckets[_oname].append(_e)
-                    break
+        def _attr_to_outlet(entry) -> str | None:
+            """Attribute a feedparser entry to one of the diagnostic outlets
+            using the exact same normalize_source() logic as _rss_matches_outlet."""
+            _src_n = normalize_source(get_outlet(entry))
+            try:
+                _host_n = normalize_source(
+                    urllib.parse.urlparse(getattr(entry, "link", "") or "").netloc
+                )
+            except Exception:
+                _host_n = ""
+            for _oname, _domain in _diag_outlet_map.items():
+                _name_n = normalize_source(_oname)
+                if _src_n == _name_n or _src_n == "the " + _name_n:
+                    return _oname
+                if _name_n and _name_n in _src_n:
+                    return _oname
+                if _domain and _host_n == _domain:
+                    return _oname
+                if _domain and _src_n == _domain:
+                    return _oname
+                if _domain and _domain in _src_n:
+                    return _oname
+            return None
+
+        _outlet_buckets: dict[str, list] = {k: [] for k in _diag_outlet_map}
+        for _e in raw_entries:          # post-boilerplate raw entries
+            _attr = _attr_to_outlet(_e)
+            if _attr:
+                _outlet_buckets[_attr].append(_e)
 
         _rc_lines = [
-            f"Recency check — cutoff = {_cutoff_36.strftime('%Y-%m-%d %H:%M')} UTC "
-            f"(now minus 36 h).  PASS = kept, FAIL = dropped."
+            f"Recency check (post-boilerplate) — "
+            f"cutoff = {_cutoff_36.strftime('%Y-%m-%d %H:%M')} UTC  (now − 36 h)"
         ]
         for _oname, _bucket in _outlet_buckets.items():
-            _rc_lines.append(f"\n  ── {_oname} ({len(_bucket)} articles) ──")
+            _rc_lines.append(
+                f"\n  ── {_oname} ({len(_bucket)} articles after boilerplate strip) ──"
+            )
             if not _bucket:
-                _rc_lines.append("    (no articles matched this outlet's source name)")
+                _rc_lines.append("    (no articles attributed to this outlet)")
                 continue
             for _e in _bucket:
                 _pub_raw    = getattr(_e, "published", None) or "(missing)"
@@ -1548,7 +1612,7 @@ if scan_clicked:
                 if _pub_parsed is not None:
                     _hours_old = (_now_utc - _pub_parsed).total_seconds() / 3600
                     _passes    = _pub_parsed >= _cutoff_36
-                    _status    = "PASS" if _passes else f"FAIL  ({_hours_old:.1f}h old > 36h)"
+                    _status    = "PASS" if _passes else f"FAIL  ({_hours_old:.1f}h > 36h)"
                     _hrs_str   = f"{_hours_old:.1f}h"
                 else:
                     _passes  = True   # filter_recent keeps entries with no date
