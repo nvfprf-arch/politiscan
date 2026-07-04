@@ -278,6 +278,24 @@ def get_outlet(entry) -> str:
         return "Unknown"
 
 
+def _debug_source_tally(articles, stage: str, is_dicts: bool = True) -> str:
+    """Return a formatted per-source article count string for pipeline diagnostics.
+
+    Pass is_dicts=False when articles are raw feedparser entry objects (pre-entries_to_dicts);
+    in that case source names are extracted via get_outlet().
+    """
+    from collections import Counter
+    if is_dicts:
+        sources = [a.get("source_name", "") or "Unknown" for a in articles]
+    else:
+        sources = [get_outlet(e) for e in articles]
+    counts = Counter(sources)
+    lines = [f"{stage}  [total={len(articles)}]"]
+    for src, n in sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:30]:
+        lines.append(f"  {n:4d}  {src}")
+    return "\n".join(lines)
+
+
 def summarize_article(title: str, description: str) -> str:
     """Call Claude Haiku to produce a 4-line political summary."""
     api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -1481,10 +1499,42 @@ if scan_clicked:
     outlet_site_counts = rss_result[2] or {}
     newsdata_dicts     = nd_result[0] or []
 
+    # ── STAGE 1: all raw RSS entries returned by fetch_all_feeds ─────────────
+    if debug_mode:
+        _t = _debug_source_tally(raw_entries, "STAGE 1 — raw RSS (all fetched, pre-filter)", is_dicts=False)
+        print(f"\n[PIPELINE DEBUG]\n{_t}")
+        st.sidebar.markdown("**[1] Raw RSS entries (all fetched)**")
+        st.sidebar.code(_t)
+
     recent, _  = filter_recent(raw_entries, hours=36)
+
+    # ── STAGE 2 (user's stage 3): after 36-hour recency filter ───────────────
+    if debug_mode:
+        _t = _debug_source_tally(recent, "STAGE 2 — after 36h recency filter", is_dicts=False)
+        print(f"[PIPELINE DEBUG]\n{_t}")
+        st.sidebar.markdown("**[2] After 36h recency filter**")
+        st.sidebar.code(_t)
+
     unique_rss = deduplicate(recent, threshold=0.70)
+
+    # ── STAGE 3 (user's stage 2): after word-overlap title dedup ─────────────
+    # NOTE: this is the "truncation" stage — articles with >70% word overlap
+    # in their headline with an already-kept article are silently dropped here.
+    if debug_mode:
+        _t = _debug_source_tally(unique_rss, "STAGE 3 — after word-overlap title dedup (threshold=0.70)", is_dicts=False)
+        print(f"[PIPELINE DEBUG]\n{_t}")
+        st.sidebar.markdown("**[3] After word-overlap title dedup (threshold=0.70)**")
+        st.sidebar.code(_t)
+
     rss_dicts  = entries_to_dicts(unique_rss, channel="rss")
     rss_total_raw = len(rss_dicts)
+
+    # ── STAGE 4: after entries_to_dicts (source_name now extracted) ──────────
+    if debug_mode:
+        _t = _debug_source_tally(rss_dicts, "STAGE 4 — after entries_to_dicts (source_name extracted)")
+        print(f"[PIPELINE DEBUG]\n{_t}")
+        st.sidebar.markdown("**[4] After entries_to_dicts (source_name extracted)**")
+        st.sidebar.code(_t)
 
     # Diagnostic: print any source names that look like Kannada outlets,
     # so we can see exactly how Google News labels them regardless of outlet filter.
@@ -1601,6 +1651,13 @@ if scan_clicked:
         rss_dicts = _kept
         print(f"[PIPELINE] After outlet filter: {len(rss_dicts)} RSS articles remain")
 
+        # ── STAGE 5: after outlet name/domain filter ──────────────────────────
+        if debug_mode:
+            _t = _debug_source_tally(rss_dicts, "STAGE 5 — after outlet name/domain filter")
+            print(f"[PIPELINE DEBUG]\n{_t}")
+            st.sidebar.markdown("**[5] After outlet name/domain filter**")
+            st.sidebar.code(_t)
+
     rss_total = len(rss_dicts)
 
     unique_nd     = deduplicate_dicts(newsdata_dicts, threshold=0.70)
@@ -1611,6 +1668,13 @@ if scan_clicked:
     print(f"\n[PIPELINE] Before dedup: {rss_total} RSS articles, {nd_count} NewsData articles")
     print(f"[PIPELINE] newsdata_dicts length (raw from _nd_worker): {len(newsdata_dicts)}")
     print(f"[PIPELINE] Combined article_dicts total: {len(article_dicts)}")
+
+    # ── STAGE 6: combined RSS + NewsData, entering deduplicate_all ───────────
+    if debug_mode:
+        _t = _debug_source_tally(article_dicts, "STAGE 6 — combined RSS + NewsData (entering deduplicate_all)")
+        print(f"[PIPELINE DEBUG]\n{_t}")
+        st.sidebar.markdown("**[6] Combined RSS + NewsData (pre-dedup)**")
+        st.sidebar.code(_t)
 
 
     if not article_dicts and active_outlets:
@@ -1636,8 +1700,15 @@ if scan_clicked:
         pre_dedup_count = len(article_dicts)
 
         with st.spinner("Deduplicating stories across sources..."):
-            article_dicts = deduplicate_all(article_dicts, api_key=api_key)
+            article_dicts = deduplicate_all(article_dicts, api_key=api_key, debug_mode=debug_mode)
         post_dedup_count = len(article_dicts)
+
+        # ── STAGE 7-9 sidebar display (prints happen inside deduplicator.py) ─
+        if debug_mode:
+            _t = _debug_source_tally(article_dicts, "STAGE 7 — after full deduplicate_all (URL+embed+Claude)")
+            print(f"[PIPELINE DEBUG]\n{_t}")
+            st.sidebar.markdown("**[7] After deduplicate_all (URL + embed + Claude)**")
+            st.sidebar.code(_t)
 
         # Capture profile before thread starts
         _client_profile = st.session_state.get("client_profile")
@@ -1650,6 +1721,7 @@ if scan_clicked:
                 rank_result[0] = rank_articles(
                     article_dicts, state=state, district=district,
                     api_key=api_key, client_profile=_client_profile,
+                    debug_mode=debug_mode,
                 )
             except Exception as e:
                 rank_exc[0] = e
@@ -1678,6 +1750,13 @@ if scan_clicked:
             st.stop()
 
         ranked = rank_result[0] or []
+
+        # ── STAGE 8: after rank_articles (classify_political + hard filter) ──
+        if debug_mode:
+            _t = _debug_source_tally(ranked, "STAGE 8 — after rank_articles (classify_political + out-of-region filter)")
+            print(f"[PIPELINE DEBUG]\n{_t}")
+            st.sidebar.markdown("**[8] After rank_articles (classify + out-of-region filter)**")
+            st.sidebar.code(_t)
 
         scope_note = f" (state-level results for {state})" if scope == "state" else ""
 
