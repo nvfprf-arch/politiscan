@@ -1506,6 +1506,69 @@ if scan_clicked:
         st.sidebar.markdown("**[1] Raw RSS entries (all fetched)**")
         st.sidebar.code(_t)
 
+    # ── PRE-RECENCY DIAGNOSTIC (Debug Mode only) ─────────────────────────────
+    # For every article from the 5 selected Kannada outlets, show the raw
+    # published string, the parsed datetime, and how many hours old it is
+    # relative to the 36h cutoff.  Grouped by outlet for easy comparison.
+    if debug_mode:
+        _now_utc   = datetime.now(timezone.utc)
+        _cutoff_36 = _now_utc - timedelta(hours=36)
+
+        # Signals used to attribute a raw feedparser entry to an outlet.
+        # Keys must match the exact outlet display names used in the sidebar.
+        _outlet_signals: dict[str, tuple] = {
+            "Udayavani":          ("udayavani",),
+            "Prajavani":          ("prajavani",),
+            "Vijaya Karnataka":   ("vijaya karnataka", "vijayakarnataka"),
+            "Kannada Prabha":     ("kannada prabha",   "kannadaprabha"),
+            "TV9 Kannada":        ("tv9 kannada",       "tv9kannada"),
+        }
+
+        # Bucket raw entries by outlet (first signal match wins)
+        _outlet_buckets: dict[str, list] = {k: [] for k in _outlet_signals}
+        for _e in raw_entries:
+            _src_lower = get_outlet(_e).lower()
+            for _oname, _sigs in _outlet_signals.items():
+                if any(sig in _src_lower for sig in _sigs):
+                    _outlet_buckets[_oname].append(_e)
+                    break
+
+        _rc_lines = [
+            f"Recency check — cutoff = {_cutoff_36.strftime('%Y-%m-%d %H:%M')} UTC "
+            f"(now minus 36 h).  PASS = kept, FAIL = dropped."
+        ]
+        for _oname, _bucket in _outlet_buckets.items():
+            _rc_lines.append(f"\n  ── {_oname} ({len(_bucket)} articles) ──")
+            if not _bucket:
+                _rc_lines.append("    (no articles matched this outlet's source name)")
+                continue
+            for _e in _bucket:
+                _pub_raw    = getattr(_e, "published", None) or "(missing)"
+                _pub_parsed = parse_published(_e)
+                if _pub_parsed is not None:
+                    _hours_old = (_now_utc - _pub_parsed).total_seconds() / 3600
+                    _passes    = _pub_parsed >= _cutoff_36
+                    _status    = "PASS" if _passes else f"FAIL  ({_hours_old:.1f}h old > 36h)"
+                    _hrs_str   = f"{_hours_old:.1f}h"
+                else:
+                    _passes  = True   # filter_recent keeps entries with no date
+                    _status  = "PASS (no date — kept by default)"
+                    _hrs_str = "N/A"
+                _title = (getattr(_e, "title", "") or "")[:65]
+                _rc_lines.append(
+                    f"    [{_status}]\n"
+                    f"      pub_raw    = {_pub_raw!r}\n"
+                    f"      pub_parsed = {_pub_parsed}\n"
+                    f"      hours_old  = {_hrs_str}\n"
+                    f"      title      = {_title!r}"
+                )
+
+        _rc_text = "\n".join(_rc_lines)
+        print(f"\n[RECENCY DIAG]\n{_rc_text}")
+        st.sidebar.markdown("**[Pre-filter] Outlet article ages vs 36h cutoff**")
+        st.sidebar.code(_rc_text)
+    # ── END PRE-RECENCY DIAGNOSTIC ────────────────────────────────────────────
+
     recent, _  = filter_recent(raw_entries, hours=36)
 
     # ── STAGE 2 (user's stage 3): after 36-hour recency filter ───────────────
