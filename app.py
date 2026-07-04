@@ -122,35 +122,52 @@ def _run_feeds(queries: list[str]) -> list:
 
 
 @st.cache_data(ttl=1800)
-def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> tuple[list, str]:
-    """Fetch news with district+state queries, falling back to state-only if needed.
-    When selected_outlets is provided, also runs 4 site-filtered queries per outlet.
-    Returns (combined_entries, scope_used) where scope_used is 'district' or 'state'.
+def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> tuple[list, str, dict]:
+    """Fetch news with district+state queries plus per-outlet site-restricted queries.
+
+    For each selected outlet, fires:
+      • One English-language site-restricted query (site:domain location)
+      • One Kannada-language site-restricted query (hl=kn-IN) for Kannada outlets
+
+    General (non-site-restricted) political queries are also run and all results
+    are combined, so articles that surface via the general query are preserved.
+
+    Returns (combined_entries, scope_used, outlet_site_counts) where:
+      scope_used        — 'district' or 'state'
+      outlet_site_counts — {outlet_name: {"site_en": N, "site_kn": M}}
     Cached for 30 minutes per district/state/outlets combination.
     """
     location = f"{district} {state}"
-    queries = _build_queries(location)
-    queries.extend(_build_regional_queries(district, state))
-    for outlet in (selected_outlets or []):
-        domain = OUTLET_DOMAINS.get(outlet)
-        if domain:
-            queries.extend(_build_outlet_queries(location, domain))
 
-    entries = _run_feeds(queries)
-    recent, _ = filter_recent(entries, hours=36)
+    # Outlet (name, domain) pairs for site-restricted queries
+    outlet_pairs = [
+        (o, OUTLET_DOMAINS[o])
+        for o in (selected_outlets or [])
+        if OUTLET_DOMAINS.get(o)
+    ]
+
+    # General queries (unchanged behaviour)
+    general_queries = _build_queries(location)
+    general_queries.extend(_build_regional_queries(district, state))
+
+    # Fetch general queries + per-outlet site queries concurrently.
+    # _run_feeds already parallelises internally; we call both helpers and merge.
+    general_entries = _run_feeds(general_queries)
+    site_entries, outlet_site_counts = _fetch_outlet_site_entries(outlet_pairs, location)
+
+    combined = general_entries + site_entries
+    recent, _ = filter_recent(combined, hours=36)
     if recent:
-        return entries, "district"
+        return combined, "district", outlet_site_counts
 
     # Fallback: state-only queries
     state_queries = _build_queries(state)
     state_queries.extend(_build_regional_queries(district, state))
-    for outlet in (selected_outlets or []):
-        domain = OUTLET_DOMAINS.get(outlet)
-        if domain:
-            state_queries.extend(_build_outlet_queries(state, domain))
+    state_general_entries = _run_feeds(state_queries)
+    state_site_entries, state_outlet_counts = _fetch_outlet_site_entries(outlet_pairs, state)
 
-    entries = _run_feeds(state_queries)
-    return entries, "state"
+    combined_state = state_general_entries + state_site_entries
+    return combined_state, "state", state_outlet_counts
 
 
 def parse_published(entry) -> datetime | None:
@@ -318,6 +335,72 @@ def entries_to_dicts(entries: list, channel: str = "rss") -> list:
 _KANNADA_OUTLET_NAMES = {
     "Vijaya Karnataka", "Prajavani", "Udayavani", "Kannada Prabha", "TV9 Kannada",
 }
+
+# Domains that warrant a parallel Kannada-language (hl=kn-IN) RSS query.
+_KANNADA_OUTLET_DOMAINS: set[str] = {
+    OUTLET_DOMAINS[n] for n in _KANNADA_OUTLET_NAMES if n in OUTLET_DOMAINS
+}
+
+
+def _build_outlet_site_url_en(location: str, domain: str) -> str:
+    """Single English-language site-restricted Google News RSS URL.
+    Uses only site:domain + location (no extra keyword clutter) to maximise coverage.
+    """
+    q = "site:" + domain + "+" + location.replace(" ", "+")
+    return "https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN%3Aen&q=" + q
+
+
+def _build_outlet_site_url_kn(location: str, domain: str) -> str:
+    """Kannada-language site-restricted Google News RSS URL.
+    Surfaces Kannada-script articles that the English-language endpoint may miss.
+    """
+    q = "site:" + domain + "+" + location.replace(" ", "+")
+    return "https://news.google.com/rss/search?hl=kn-IN&gl=IN&ceid=IN%3Akn&q=" + q
+
+
+def _fetch_outlet_site_entries(
+    outlet_pairs: list[tuple[str, str]],
+    location: str,
+) -> tuple[list, dict]:
+    """Fetch site-restricted RSS entries for each (outlet_name, domain) pair in parallel.
+
+    For domains in _KANNADA_OUTLET_DOMAINS a second Kannada-language query is also fired.
+    Returns (all_entries, {outlet_name: {"site_en": N, "site_kn": M}}).
+    """
+    if not outlet_pairs:
+        return [], {}
+
+    # Build flat list of (outlet_name, url) so we can parallelise everything at once.
+    tagged_urls: list[tuple[str, str, str]] = []  # (outlet_name, lang_tag, url)
+    for name, domain in outlet_pairs:
+        tagged_urls.append((name, "site_en", _build_outlet_site_url_en(location, domain)))
+        if domain in _KANNADA_OUTLET_DOMAINS:
+            tagged_urls.append((name, "site_kn", _build_outlet_site_url_kn(location, domain)))
+
+    urls = [u for _, _, u in tagged_urls]
+    raw_results: list = [None] * len(urls)
+    threads = [
+        threading.Thread(target=fetch_feed, args=(url, raw_results, i))
+        for i, url in enumerate(urls)
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    all_entries: list = []
+    per_outlet: dict[str, dict] = {}
+    for (name, lang_tag, _url), entries in zip(tagged_urls, raw_results):
+        entries = entries or []
+        counts = per_outlet.setdefault(name, {"site_en": 0, "site_kn": 0})
+        counts[lang_tag] += len(entries)
+        all_entries.extend(entries)
+
+    print(f"\n[SITE-QUERY] {location!r} — per-outlet raw counts from dedicated queries:")
+    for name, counts in per_outlet.items():
+        print(f"  {name}: en={counts['site_en']}  kn={counts['site_kn']}")
+
+    return all_entries, per_outlet
 
 
 @st.cache_data(ttl=1800)
@@ -1323,13 +1406,14 @@ if scan_clicked:
     region_label = f"{district}, {state}"
     st.session_state.region_label = region_label
 
-    rss_result = [None, None]
-    nd_result  = [[]]   # [articles]
+    rss_result = [None, None, {}]   # [entries, scope, outlet_site_counts]
+    nd_result  = [[]]              # [articles]
 
     def _rss_worker():
-        entries, scope_val = fetch_all_feeds(district, state, tuple(active_outlets))
+        entries, scope_val, outlet_counts = fetch_all_feeds(district, state, tuple(active_outlets))
         rss_result[0] = entries
         rss_result[1] = scope_val
+        rss_result[2] = outlet_counts
 
     def _nd_worker():
         import sys
@@ -1392,9 +1476,10 @@ if scan_clicked:
         t_rss.start(); t_nd.start()
         t_rss.join();  t_nd.join()
 
-    raw_entries    = rss_result[0] or []
-    scope          = rss_result[1] or "district"
-    newsdata_dicts = nd_result[0] or []
+    raw_entries        = rss_result[0] or []
+    scope              = rss_result[1] or "district"
+    outlet_site_counts = rss_result[2] or {}
+    newsdata_dicts     = nd_result[0] or []
 
     recent, _  = filter_recent(raw_entries, hours=36)
     unique_rss = deduplicate(recent, threshold=0.70)
@@ -1435,6 +1520,30 @@ if scan_clicked:
         st.sidebar.code("\n".join(_nd_raw_sources) or "(none)")
         st.sidebar.markdown("**Debug: outlet domains being filtered against**")
         st.sidebar.code("\n".join(_filter_domains) or "(none)")
+        # Per-outlet site-query breakdown
+        if outlet_site_counts:
+            _breakdown_lines = []
+            for _oname in active_outlets:
+                _counts = outlet_site_counts.get(_oname, {})
+                _site_en = _counts.get("site_en", 0)
+                _site_kn = _counts.get("site_kn", 0)
+                # Count how many rss_dicts entries match this outlet (general + site combined)
+                _odom = (_active_outlet_domains.get(_oname) or "").lower()
+                _oname_norm = normalize_source(_oname)
+                _total_matched = sum(
+                    1 for a in rss_dicts
+                    if _oname_norm in normalize_source(a.get("source_name") or "")
+                    or (_odom and _odom in normalize_source(a.get("source_name") or ""))
+                )
+                _general_est = max(0, _total_matched - _site_en - _site_kn)
+                _breakdown_lines.append(
+                    f"{_oname}: site_en={_site_en}  site_kn={_site_kn}  general≈{_general_est}"
+                )
+            st.sidebar.markdown("**Debug: per-outlet RSS query breakdown**")
+            st.sidebar.code("\n".join(_breakdown_lines))
+            print(f"\n[DEBUG MODE] Per-outlet site-query breakdown:")
+            for _line in _breakdown_lines:
+                print(f"  {_line}")
         print(f"\n[DEBUG MODE] RSS raw sources ({len(_rss_raw_sources)}): {_rss_raw_sources}")
         print(f"[DEBUG MODE] NewsData raw sources ({len(_nd_raw_sources)}): {_nd_raw_sources}")
         print(f"[DEBUG MODE] Filter domains: {_filter_domains}")
