@@ -1737,15 +1737,12 @@ if scan_clicked:
                 "_profile_boosted":        art.get("profile_boosted", False),
             })
 
-        SHORTLIST_THRESHOLD = 7.0   # articles >= this score qualify directly; others fill via fallback
+        SHORTLIST_THRESHOLD = 5.0   # articles >= this score qualify directly
 
-        # Shortlist: articles scoring >= 7.0, OR top 10 if fewer than 5 clear the threshold.
+        # Shortlist: articles scoring >= 5.0, always at least the top 10 by score.
         # Everything else stays in "not in shortlist" for the user to review and promote.
         _above = [r for r in rows if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD]
-        if len(_above) < 5:
-            _shortlist = rows[:10]
-        else:
-            _shortlist = _above
+        _shortlist = _above if len(_above) >= 10 else rows[:10]
         st.session_state.shortlist_articles = _shortlist
         st.session_state.funnel_counts = {
             "post_dedup": post_dedup_count,

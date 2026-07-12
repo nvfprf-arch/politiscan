@@ -117,8 +117,13 @@ def _process_article(article: dict, state: str, district: str, api_key: str) -> 
             region_tier = "other"
             _acr        = False
         else:
-            region_tier = "none"
-            _acr        = False
+            # No explicit location found in text. Fall back to Claude's contextual
+            # judgment: regional outlets and articles discussing state-level politics
+            # without naming the state often land here (e.g. Kannada-language articles,
+            # "CM announced", "state government decided"). Trust the scorer's reasoning
+            # rather than penalising all location-free articles equally.
+            _acr        = imp["affects_client_region"]
+            region_tier = "state" if _acr else "none"
 
     if _acr != imp["affects_client_region"]:
         print(f"  [REGION OVERRIDE] Claude={imp['affects_client_region']} → "
@@ -181,7 +186,6 @@ def rank_articles(
     district: str,
     api_key: str,
     client_profile: dict | None = None,
-    debug_mode: bool = False,
 ) -> list:
     """Classify, score, and rank a list of article dicts.
 
@@ -190,21 +194,7 @@ def rank_articles(
 
     Returns articles that are POLITICAL, sorted by final_score descending.
     """
-    from collections import Counter
-
-    def _tally(lst, label):
-        counts = Counter(a.get("source_name", "Unknown") or "Unknown" for a in lst)
-        lines = [f"{label}  [total={len(lst)}]"]
-        for src, n in sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:30]:
-            lines.append(f"  {n:4d}  {src}")
-        return "\n".join(lines)
-
-    print(f"\n[RANKER ENTRY] rank_articles called — state={state!r}  district={district!r}  articles={len(articles_list)}")
-    if debug_mode:
-        print(f"[PIPELINE DEBUG]\n{_tally(articles_list, 'RANKER INPUT — entering rank_articles')}")
-
     results = []
-    non_political = []
     processed = 0
 
     with ThreadPoolExecutor(max_workers=30) as executor:
@@ -213,11 +203,8 @@ def rank_articles(
             for art in articles_list
         }
         for future in as_completed(futures):
-            original_art = futures[future]
             result = future.result()
             processed += 1
-            if processed % 10 == 0:
-                print(f"  [ranker] processed {processed}/{len(articles_list)} articles...")
             if result is not None:
                 original = result["final_score"]
                 adjusted = apply_client_profile(original, result, client_profile)
@@ -225,43 +212,14 @@ def rank_articles(
                 result["client_adjusted_score"] = adjusted
                 result["profile_boosted"] = (adjusted - original) > 0.5
                 results.append(result)
-            elif debug_mode:
-                non_political.append(original_art)
-
-    # ── STAGE 7: after classify_political ────────────────────────────────────
-    if debug_mode:
-        print(f"[PIPELINE DEBUG]\n{_tally(results, 'STAGE 7 — after classify_political (POLITICAL articles only)')}")
-        if non_political:
-            print(f"[PIPELINE DEBUG]\n{_tally(non_political, 'STAGE 7 — NON-POLITICAL articles dropped by classify_political')}")
 
     results.sort(key=lambda x: x["client_adjusted_score"], reverse=True)
 
-    # Step 4 — hard filter: drop out-of-region articles below the score threshold
-    before_filter = len(results)
-    out_of_region_dropped = [
-        r for r in results
-        if not r["affects_client_region"] and r["client_adjusted_score"] < OUT_OF_REGION_SCORE_THRESHOLD
-    ]
+    # Hard filter: drop out-of-region articles below the score threshold
     results = [
         r for r in results
         if r["affects_client_region"] or r["client_adjusted_score"] >= OUT_OF_REGION_SCORE_THRESHOLD
     ]
-    dropped = before_filter - len(results)
-
-    # ── STAGE 8: after out-of-region hard filter ──────────────────────────────
-    if debug_mode:
-        print(f"[PIPELINE DEBUG]\n{_tally(results, 'STAGE 8 — after out-of-region hard filter (final ranked output)')}")
-        if out_of_region_dropped:
-            print(f"[PIPELINE DEBUG]\n{_tally(out_of_region_dropped, 'STAGE 8 — out-of-region articles dropped (score < {OUT_OF_REGION_SCORE_THRESHOLD})')}")
-
-    # Debug: print per-article region flag and score
-    print(f"\n[DEBUG] rank_articles: {state}/{district} — "
-          f"{before_filter} political articles scored, {dropped} out-of-region articles dropped "
-          f"(score < {OUT_OF_REGION_SCORE_THRESHOLD}), {len(results)} returned.")
-    print(f"  {'Rank':<4} {'Score':<6} {'Region':<7} {'Headline'[:65]}")
-    for i, r in enumerate(results, 1):
-        region_flag = "YES" if r["affects_client_region"] else "NO "
-        print(f"  {i:<4} {r['client_adjusted_score']:<6.2f} {region_flag}    {r.get('headline', '')[:65]}")
 
     return results
 
