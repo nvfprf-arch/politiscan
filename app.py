@@ -369,6 +369,48 @@ def entries_to_dicts(entries: list, channel: str = "rss") -> list:
 
 
 
+def translate_native_entries(dicts: list, state: str, api_keys: dict) -> None:
+    """Language-process native-feed (regional-language) entries BEFORE classification.
+
+    Native RSS feeds (TV9 Kannada, Prajavani, Vijaya Karnataka, Kannada Prabha)
+    deliver pure Kannada-script headlines/snippets. Google News RSS entries, by
+    contrast, arrive with English or transliterated titles, so the political
+    classifier and the English-substring region matcher in ranker._process_article
+    handle them out of the box. Without this step the native feeds systematically
+    fail classification / region matching and contribute 0 articles.
+
+    For each native dict this runs the same process_article() translation used
+    elsewhere, then:
+      • appends the English rendering to `snippet` so both classify_political()
+        and the region substring match see English text, and
+      • caches the summary/language under `_pre_summary`/`_pre_language` so
+        summarize_all() can reuse them instead of calling the model again.
+
+    Mutates dicts in place. Non-native entries are left untouched.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    native = [d for d in dicts if d.get("source_name") in NATIVE_RSS_FEEDS]
+    if not native:
+        return
+
+    def _work(d):
+        raw = f"{d.get('headline', '')}\n{d.get('snippet', '')}".strip()
+        try:
+            result = process_article(raw, state, api_keys)
+        except Exception:
+            return
+        summary = result.get("summary", "")
+        d["_pre_summary"]  = summary
+        d["_pre_language"] = result.get("original_language", "")
+        if summary:
+            existing = d.get("snippet", "")
+            d["snippet"] = f"{existing}\n\n[EN] {summary}".strip()
+
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        list(ex.map(_work, native))
+
+
 _KANNADA_OUTLET_NAMES = {
     "Vijaya Karnataka", "Prajavani", "Udayavani", "Kannada Prabha", "TV9 Kannada",
 }
@@ -625,6 +667,16 @@ def summarize_all(
     def _process(i, art):
         title = art.get("headline", "No Title")
         url   = art.get("url", "")
+
+        # Native feeds were already language-processed before classification —
+        # reuse that English summary instead of calling the model a second time.
+        if art.get("_pre_summary"):
+            return i, {
+                **art,
+                "Summary":      art["_pre_summary"],
+                "_language":    art.get("_pre_language", "English"),
+                "_source_type": "native",
+            }
 
         if art.get("source_channel") == "newsdata" and art.get("full_content"):
             article_text = f"{title}\n{art['full_content']}"
@@ -1637,6 +1689,13 @@ if scan_clicked:
             article_dicts = deduplicate_all(article_dicts, api_key=api_key)
         post_dedup_count = len(article_dicts)
 
+        # Language-process native regional-language feeds (TV9 Kannada,
+        # Prajavani, Vijaya Karnataka, Kannada Prabha) into English BEFORE
+        # classification, so they are treated like Google News RSS entries.
+        _native_api_keys = {"anthropic": api_key, "sarvam": os.getenv("SARVAM_API_KEY", "")}
+        with st.spinner("Translating regional-language articles..."):
+            translate_native_entries(article_dicts, state, _native_api_keys)
+
         # Capture profile before thread starts
         _client_profile = st.session_state.get("client_profile")
 
@@ -1737,12 +1796,18 @@ if scan_clicked:
                 "_profile_boosted":        art.get("profile_boosted", False),
             })
 
-        SHORTLIST_THRESHOLD = 5.0   # articles >= this score qualify directly
+        SHORTLIST_THRESHOLD = 5.0   # articles >= this score qualify
+        SHORTLIST_MAX       = 10    # hard cap on the shortlist size
 
-        # Shortlist: articles scoring >= 5.0, always at least the top 10 by score.
-        # Everything else stays in "not in shortlist" for the user to review and promote.
-        _above = [r for r in rows if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD]
-        _shortlist = _above if len(_above) >= 10 else rows[:10]
+        # Shortlist: the top SHORTLIST_MAX political articles by score.
+        # Articles at/above threshold qualify first; if fewer than the cap
+        # qualify, fall back to the top-scoring articles so it is never sparse.
+        # Every remaining political article falls through to the
+        # "All Scanned Articles — not in shortlist" section (nothing is discarded).
+        _by_score   = sorted(rows, key=lambda r: r.get("_client_adjusted_score", 0), reverse=True)
+        _above      = [r for r in _by_score if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD]
+        _qualifying = _above if len(_above) >= SHORTLIST_MAX else _by_score
+        _shortlist  = _qualifying[:SHORTLIST_MAX]
         st.session_state.shortlist_articles = _shortlist
         st.session_state.funnel_counts = {
             "post_dedup": post_dedup_count,
