@@ -102,9 +102,6 @@ def _run_feeds(queries: list[str]) -> list:
     """Fetch all queries in parallel and return combined entries."""
     base = "https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN:en&q="
     urls = [base + q.replace(" ", "+") for q in queries]
-    print(f"\n[DEBUG] RSS query URLs ({len(urls)} queries):")
-    for u in urls:
-        print(f"  {u}")
     results = [None] * len(urls)
     threads = [
         threading.Thread(target=fetch_feed, args=(url, results, i))
@@ -173,9 +170,6 @@ def fetch_all_feeds(district: str, state: str, selected_outlets: tuple = ()) -> 
                 _e["_forced_source"] = outlet_name
             native_counts[outlet_name] = {"native": len(entries)}
             native_entries.extend(entries)
-        print(f"\n[NATIVE-FEED] per-outlet raw counts:")
-        for _n, _c in native_counts.items():
-            print(f"  {_n}: native={_c['native']}")
 
     # ── General queries (unchanged) ───────────────────────────────────────────
     general_queries = _build_queries(location)
@@ -320,23 +314,6 @@ def get_outlet(entry) -> str:
         return "Unknown"
 
 
-def _debug_source_tally(articles, stage: str, is_dicts: bool = True) -> str:
-    """Return a formatted per-source article count string for pipeline diagnostics.
-
-    Pass is_dicts=False when articles are raw feedparser entry objects (pre-entries_to_dicts);
-    in that case source names are extracted via get_outlet().
-    """
-    from collections import Counter
-    if is_dicts:
-        sources = [a.get("source_name", "") or "Unknown" for a in articles]
-    else:
-        sources = [get_outlet(e) for e in articles]
-    counts = Counter(sources)
-    lines = [f"{stage}  [total={len(articles)}]"]
-    for src, n in sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:30]:
-        lines.append(f"  {n:4d}  {src}")
-    return "\n".join(lines)
-
 
 def summarize_article(title: str, description: str) -> str:
     """Call Claude Haiku to produce a 4-line political summary."""
@@ -455,10 +432,6 @@ def _fetch_outlet_site_entries(
         counts = per_outlet.setdefault(name, {"site_en": 0, "site_kn": 0})
         counts[lang_tag] += len(entries)
         all_entries.extend(entries)
-
-    print(f"\n[SITE-QUERY] {location!r} — per-outlet raw counts from dedicated queries:")
-    for name, counts in per_outlet.items():
-        print(f"  {name}: en={counts['site_en']}  kn={counts['site_kn']}")
 
     return all_entries, per_outlet
 
@@ -1206,25 +1179,6 @@ def _show_results():
         shortlist = [r for r in shortlist if _keyword_match(r)]
     shortlist_urls = {r.get("Link") for r in shortlist}
 
-    # ── RENDER-TIME DIAGNOSTIC ──────────────────────────────────────────────
-    _sl_raw   = st.session_state.get("shortlist_articles", [])
-    _all_rows = st.session_state.get("results_rows", [])
-    print(f"\n[RENDER] _show_results() shortlist diagnostic:")
-    print(f"  results_rows in session state:          {len(_all_rows)} articles")
-    print(f"  shortlist_articles in session state:    {len(_sl_raw)} articles")
-    print(f"  selected_type active:                   {selected_type!r}")
-    print(f"  keyword active:                         {keyword!r}")
-    _after_type = [r for r in _sl_raw if selected_type in ("All Report Types", "", None) or r.get("_report_type", "CONFIRMED") == selected_type]
-    _after_kw   = [r for r in _after_type if not keyword or keyword in (r.get("Headline","") or "").lower() or keyword in (r.get("Summary","") or "").lower()]
-    print(f"  shortlist after type filter:            {len(_after_type)} articles")
-    print(f"  shortlist after keyword filter:         {len(_after_kw)} articles")
-    print(f"  final 'shortlist' variable at render:   {len(shortlist)} articles")
-    if _sl_raw and not shortlist:
-        print(f"  !! {len(_sl_raw)} articles in session state were filtered to 0 by display filters")
-        for r in _sl_raw[:5]:
-            print(f"     type={r.get('_report_type','?')!r}  score={r.get('_client_adjusted_score',0):.2f}  {r.get('Headline','')[:60]}")
-    # ── END DIAGNOSTIC ───────────────────────────────────────────────────────
-
     _sl_total = len(st.session_state.get("shortlist_articles", []))
     if not shortlist and _sl_total:
         st.subheader(f"AI Shortlist (0 of {_sl_total} articles shown — hidden by 'Show Report Types' filter)")
@@ -1541,13 +1495,6 @@ if scan_clicked:
     outlet_site_counts = rss_result[2] or {}
     newsdata_dicts     = nd_result[0] or []
 
-    # ── STAGE 1: all raw RSS entries returned by fetch_all_feeds ─────────────
-    if debug_mode:
-        _t = _debug_source_tally(raw_entries, "STAGE 1 — raw RSS (all fetched, pre-filter)", is_dicts=False)
-        print(f"\n[PIPELINE DEBUG]\n{_t}")
-        st.sidebar.markdown("**[1] Raw RSS entries (all fetched)**")
-        st.sidebar.code(_t)
-
     # ── BOILERPLATE FILTER ────────────────────────────────────────────────────
     # Strip obvious non-article pages (Terms, Privacy Policy, Contact Us, etc.)
     # that site-restricted RSS queries sometimes return for certain domains.
@@ -1570,156 +1517,15 @@ if scan_clicked:
             return True
         return False
 
-    _boilerplate_removed = [e for e in raw_entries if     _is_boilerplate_entry(e)]
-    raw_entries          = [e for e in raw_entries if not _is_boilerplate_entry(e)]
-
-    if debug_mode and _boilerplate_removed:
-        _bp_lines = [f"Boilerplate stripped ({len(_boilerplate_removed)} entries):"]
-        for _be in _boilerplate_removed:
-            _bp_lines.append(
-                f"  src={get_outlet(_be)!r:30s}  "
-                f"title={( getattr(_be, 'title', '') or '')[:80]!r}"
-            )
-        _bp_text = "\n".join(_bp_lines)
-        print(f"\n[BOILERPLATE FILTER]\n{_bp_text}")
-        st.sidebar.markdown(f"**[1b] Boilerplate removed ({len(_boilerplate_removed)})**")
-        st.sidebar.code(_bp_text)
+    raw_entries = [e for e in raw_entries if not _is_boilerplate_entry(e)]
     # ── END BOILERPLATE FILTER ────────────────────────────────────────────────
-
-    # ── PRE-RECENCY DIAGNOSTIC (Debug Mode only) ─────────────────────────────
-    # For every article from the 5 Kannada outlets, show pub_raw / hours_old.
-    # Uses the same normalize_source() matching as the real Stage 5 outlet filter
-    # so attribution is consistent with what Stage 1 tally reports.
-    if debug_mode:
-        _now_utc   = datetime.now(timezone.utc)
-        _cutoff_36 = _now_utc - timedelta(hours=36)
-
-        # Outlet→domain map, same source as Stage 5 (_active_outlet_domains).
-        # Restricted to the 5 Kannada outlets so other selected outlets don't
-        # add noise (Udayavani is the baseline; the others are the suspects).
-        _DIAG_KANNADA = {
-            "Udayavani", "Prajavani", "Vijaya Karnataka",
-            "Kannada Prabha", "Kannada Prabha Online", "TV9 Kannada",
-        }
-        _diag_outlet_map = {
-            o: (OUTLET_DOMAINS.get(o) or "").lower()
-            for o in active_outlets
-            if o in _DIAG_KANNADA
-        }
-
-        def _attr_to_outlet(entry) -> str | None:
-            """Attribute a feedparser entry to one of the diagnostic outlets
-            using the exact same normalize_source() logic as _rss_matches_outlet."""
-            _src_n = normalize_source(get_outlet(entry))
-            try:
-                _host_n = normalize_source(
-                    urllib.parse.urlparse(getattr(entry, "link", "") or "").netloc
-                )
-            except Exception:
-                _host_n = ""
-            for _oname, _domain in _diag_outlet_map.items():
-                _name_n = normalize_source(_oname)
-                if _src_n == _name_n or _src_n == "the " + _name_n:
-                    return _oname
-                if _name_n and _name_n in _src_n:
-                    return _oname
-                if _domain and _host_n == _domain:
-                    return _oname
-                if _domain and _src_n == _domain:
-                    return _oname
-                if _domain and _domain in _src_n:
-                    return _oname
-            return None
-
-        _outlet_buckets: dict[str, list] = {k: [] for k in _diag_outlet_map}
-        for _e in raw_entries:          # post-boilerplate raw entries
-            _attr = _attr_to_outlet(_e)
-            if _attr:
-                _outlet_buckets[_attr].append(_e)
-
-        _rc_lines = [
-            f"Recency check (post-boilerplate) — "
-            f"cutoff = {_cutoff_36.strftime('%Y-%m-%d %H:%M')} UTC  (now − 36 h)"
-        ]
-        for _oname, _bucket in _outlet_buckets.items():
-            _rc_lines.append(
-                f"\n  ── {_oname} ({len(_bucket)} articles after boilerplate strip) ──"
-            )
-            if not _bucket:
-                _rc_lines.append("    (no articles attributed to this outlet)")
-                continue
-            for _e in _bucket:
-                _pub_raw    = getattr(_e, "published", None) or "(missing)"
-                _pub_parsed = parse_published(_e)
-                if _pub_parsed is not None:
-                    _hours_old = (_now_utc - _pub_parsed).total_seconds() / 3600
-                    _passes    = _pub_parsed >= _cutoff_36
-                    _status    = "PASS" if _passes else f"FAIL  ({_hours_old:.1f}h > 36h)"
-                    _hrs_str   = f"{_hours_old:.1f}h"
-                else:
-                    _passes  = True   # filter_recent keeps entries with no date
-                    _status  = "PASS (no date — kept by default)"
-                    _hrs_str = "N/A"
-                _title = (getattr(_e, "title", "") or "")[:65]
-                _rc_lines.append(
-                    f"    [{_status}]\n"
-                    f"      pub_raw    = {_pub_raw!r}\n"
-                    f"      pub_parsed = {_pub_parsed}\n"
-                    f"      hours_old  = {_hrs_str}\n"
-                    f"      title      = {_title!r}"
-                )
-
-        _rc_text = "\n".join(_rc_lines)
-        print(f"\n[RECENCY DIAG]\n{_rc_text}")
-        st.sidebar.markdown("**[Pre-filter] Outlet article ages vs 36h cutoff**")
-        st.sidebar.code(_rc_text)
-    # ── END PRE-RECENCY DIAGNOSTIC ────────────────────────────────────────────
 
     recent, _  = filter_recent(raw_entries, hours=36)
 
-    # ── STAGE 2 (user's stage 3): after 36-hour recency filter ───────────────
-    if debug_mode:
-        _t = _debug_source_tally(recent, "STAGE 2 — after 36h recency filter", is_dicts=False)
-        print(f"[PIPELINE DEBUG]\n{_t}")
-        st.sidebar.markdown("**[2] After 36h recency filter**")
-        st.sidebar.code(_t)
-
     unique_rss = deduplicate(recent, threshold=0.70)
-
-    # ── STAGE 3 (user's stage 2): after word-overlap title dedup ─────────────
-    # NOTE: this is the "truncation" stage — articles with >70% word overlap
-    # in their headline with an already-kept article are silently dropped here.
-    if debug_mode:
-        _t = _debug_source_tally(unique_rss, "STAGE 3 — after word-overlap title dedup (threshold=0.70)", is_dicts=False)
-        print(f"[PIPELINE DEBUG]\n{_t}")
-        st.sidebar.markdown("**[3] After word-overlap title dedup (threshold=0.70)**")
-        st.sidebar.code(_t)
 
     rss_dicts  = entries_to_dicts(unique_rss, channel="rss")
     rss_total_raw = len(rss_dicts)
-
-    # ── STAGE 4: after entries_to_dicts (source_name now extracted) ──────────
-    if debug_mode:
-        _t = _debug_source_tally(rss_dicts, "STAGE 4 — after entries_to_dicts (source_name extracted)")
-        print(f"[PIPELINE DEBUG]\n{_t}")
-        st.sidebar.markdown("**[4] After entries_to_dicts (source_name extracted)**")
-        st.sidebar.code(_t)
-
-    # Diagnostic: print any source names that look like Kannada outlets,
-    # so we can see exactly how Google News labels them regardless of outlet filter.
-    _kannada_signals = ("vijay", "prajav", "udaya", "kannada")
-    _kannada_hits = [
-        a.get("source_name", "") for a in rss_dicts
-        if any(sig in (a.get("source_name") or "").lower() for sig in _kannada_signals)
-    ]
-    if _kannada_hits:
-        print(f"\n[KANNADA SOURCE DEBUG] source_names matching Kannada outlet signals:")
-        for _s in _kannada_hits:
-            print(f"  {_s!r}")
-    else:
-        print(f"\n[KANNADA SOURCE DEBUG] no source_names matched Kannada signals in {len(rss_dicts)} RSS articles")
-
-    _rss_dicts_unfiltered = list(rss_dicts)   # snapshot before outlet filter
 
     # Build a name→domain map for the active outlet selection.
     # Domains come from the "domain" field baked into STATE_OUTLETS (via OUTLET_DOMAINS).
@@ -1728,105 +1534,23 @@ if scan_clicked:
         for o in active_outlets
     }
 
-    # Debug Mode: show what raw sources arrived vs what we're filtering against.
-    if debug_mode and active_outlets:
-        _rss_raw_sources = sorted({a.get("source_name", "") for a in rss_dicts if a.get("source_name")})
-        _nd_raw_sources  = sorted({a.get("source_name", "") for a in newsdata_dicts if a.get("source_name")})
-        _filter_domains  = sorted(_active_outlet_domains.values())
-        st.sidebar.markdown("**Debug: RSS raw source names**")
-        st.sidebar.code("\n".join(_rss_raw_sources) or "(none)")
-        st.sidebar.markdown("**Debug: NewsData raw source_ids**")
-        st.sidebar.code("\n".join(_nd_raw_sources) or "(none)")
-        st.sidebar.markdown("**Debug: outlet domains being filtered against**")
-        st.sidebar.code("\n".join(_filter_domains) or "(none)")
-        # Per-outlet fetch-method breakdown
-        if outlet_site_counts:
-            _breakdown_lines = []
-            for _oname in active_outlets:
-                _counts = outlet_site_counts.get(_oname, {})
-                if "native" in _counts:
-                    # This outlet was fetched from its own native RSS feed
-                    _native_n = _counts.get("native", 0)
-                    _breakdown_lines.append(
-                        f"{_oname}: native feed ({_native_n} entries fetched)"
-                    )
-                else:
-                    # This outlet used Google News site-restricted query
-                    _site_en = _counts.get("site_en", 0)
-                    _site_kn = _counts.get("site_kn", 0)
-                    _odom = (_active_outlet_domains.get(_oname) or "").lower()
-                    _oname_norm = normalize_source(_oname)
-                    _total_matched = sum(
-                        1 for a in rss_dicts
-                        if _oname_norm in normalize_source(a.get("source_name") or "")
-                        or (_odom and _odom in normalize_source(a.get("source_name") or ""))
-                    )
-                    _general_est = max(0, _total_matched - _site_en - _site_kn)
-                    _breakdown_lines.append(
-                        f"{_oname}: Google site-restricted  site_en={_site_en}  site_kn={_site_kn}  general≈{_general_est}"
-                    )
-            st.sidebar.markdown("**Debug: per-outlet fetch method & raw counts**")
-            st.sidebar.code("\n".join(_breakdown_lines))
-            print(f"\n[DEBUG MODE] Per-outlet fetch-method breakdown:")
-            for _line in _breakdown_lines:
-                print(f"  {_line}")
-        print(f"\n[DEBUG MODE] RSS raw sources ({len(_rss_raw_sources)}): {_rss_raw_sources}")
-        print(f"[DEBUG MODE] NewsData raw sources ({len(_nd_raw_sources)}): {_nd_raw_sources}")
-        print(f"[DEBUG MODE] Filter domains: {_filter_domains}")
+    if active_outlets and outlet_site_counts:
+        _outlet_summary = []
+        for _oname in active_outlets:
+            _counts = outlet_site_counts.get(_oname, {})
+            if "native" in _counts:
+                _outlet_summary.append(f"{_oname}: native feed  ({_counts['native']} entries)")
+            else:
+                _n = _counts.get("site_en", 0) + _counts.get("site_kn", 0)
+                _outlet_summary.append(f"{_oname}: Google site-restricted  ({_n} entries)")
+        if debug_mode and _outlet_summary:
+            st.sidebar.markdown("**Per-outlet fetch method**")
+            st.sidebar.code("\n".join(_outlet_summary))
 
     # Filter RSS results by selected outlets using normalized domain/name matching.
     # normalize_source() strips protocol, www., and '- Google News' suffixes so that
     # source tags like "Vijaya Karnataka - vijaykarnataka.com" match correctly.
     if active_outlets:
-
-        # ── PRE-FILTER DIAGNOSTIC (Debug Mode only) ───────────────────────────
-        # Shows the exact values the filter will compare, and the raw/normalized
-        # source_name + URL for every non-Udayavani article, so we can see
-        # precisely why Kannada Prabha / Prajavani / VK / TV9 Kannada are failing.
-        if debug_mode:
-            # 1) Print the exact match targets the filter uses
-            _mt_lines = ["Outlet filter match targets (name → name_norm | domain → domain_norm):"]
-            for _oname, _odomain in _active_outlet_domains.items():
-                _oname_norm  = normalize_source(_oname)
-                _odomain_norm = normalize_source(_odomain)
-                _mt_lines.append(
-                    f"  {_oname!r:28s} → norm={_oname_norm!r:28s} | "
-                    f"domain={_odomain!r:28s} → norm={_odomain_norm!r}"
-                )
-            _mt_text = "\n".join(_mt_lines)
-            print(f"\n[PRE-FILTER DIAG]\n{_mt_text}")
-            st.sidebar.markdown("**[Pre-filter] Outlet match targets**")
-            st.sidebar.code(_mt_text)
-
-            # 2) For every non-Udayavani article, show raw and normalized values
-            _non_udaya = [
-                a for a in rss_dicts
-                if "udayavani" not in (a.get("source_name") or "").lower()
-            ]
-            _pe_lines = [f"Non-Udayavani articles entering filter ({len(_non_udaya)} total):"]
-            for _a in _non_udaya:
-                _src_raw = _a.get("source_name") or ""
-                _url_raw = _a.get("url") or ""
-                try:
-                    _host_raw = urllib.parse.urlparse(_url_raw).netloc
-                except Exception:
-                    _host_raw = ""
-                _src_norm  = normalize_source(_src_raw)
-                _host_norm = normalize_source(_host_raw)
-                _pe_lines.append(
-                    f"  source_name_raw = {_src_raw!r}\n"
-                    f"    source_norm   = {_src_norm!r}\n"
-                    f"    url           = {_url_raw[:100]}\n"
-                    f"    host_raw      = {_host_raw!r}\n"
-                    f"    host_norm     = {_host_norm!r}"
-                )
-            _pe_text = "\n".join(_pe_lines)
-            print(f"[PRE-FILTER DIAG]\n{_pe_text}")
-            st.sidebar.markdown(
-                f"**[Pre-filter] Non-Udayavani articles ({len(_non_udaya)}) — raw vs normalized**"
-            )
-            st.sidebar.code(_pe_text)
-        # ── END PRE-FILTER DIAGNOSTIC ─────────────────────────────────────────
 
         def _rss_matches_outlet(art):
             src_norm = normalize_source(art.get("source_name") or "")
@@ -1863,26 +1587,7 @@ if scan_clicked:
 
             return False
 
-        print(f"\n[DEBUG] Outlet filter — selected: {list(active_outlets)}")
-        print(f"  {'Keep':<6} {'Source name (raw)':<38} {'Normalized':<30} {'Match?'}")
-        _kept, _dropped = [], []
-        for _a in rss_dicts:
-            _src_raw  = _a.get("source_name") or ""
-            _src_norm = normalize_source(_src_raw)
-            _pass = _rss_matches_outlet(_a)
-            tag = "KEEP" if _pass else "DROP"
-            print(f"  {tag:<6} {_src_raw[:37]:<38} {_src_norm[:29]:<30} {_pass}")
-            (_kept if _pass else _dropped).append(_a)
-        print(f"  → {len(_kept)} kept, {len(_dropped)} dropped")
-        rss_dicts = _kept
-        print(f"[PIPELINE] After outlet filter: {len(rss_dicts)} RSS articles remain")
-
-        # ── STAGE 5: after outlet name/domain filter ──────────────────────────
-        if debug_mode:
-            _t = _debug_source_tally(rss_dicts, "STAGE 5 — after outlet name/domain filter")
-            print(f"[PIPELINE DEBUG]\n{_t}")
-            st.sidebar.markdown("**[5] After outlet name/domain filter**")
-            st.sidebar.code(_t)
+        rss_dicts = [a for a in rss_dicts if _rss_matches_outlet(a)]
 
     rss_total = len(rss_dicts)
 
@@ -1890,18 +1595,6 @@ if scan_clicked:
     nd_count      = len(unique_nd)
     total_fetched = rss_total_raw + nd_count   # pre-filter total for display
     article_dicts = rss_dicts + unique_nd
-
-    print(f"\n[PIPELINE] Before dedup: {rss_total} RSS articles, {nd_count} NewsData articles")
-    print(f"[PIPELINE] newsdata_dicts length (raw from _nd_worker): {len(newsdata_dicts)}")
-    print(f"[PIPELINE] Combined article_dicts total: {len(article_dicts)}")
-
-    # ── STAGE 6: combined RSS + NewsData, entering deduplicate_all ───────────
-    if debug_mode:
-        _t = _debug_source_tally(article_dicts, "STAGE 6 — combined RSS + NewsData (entering deduplicate_all)")
-        print(f"[PIPELINE DEBUG]\n{_t}")
-        st.sidebar.markdown("**[6] Combined RSS + NewsData (pre-dedup)**")
-        st.sidebar.code(_t)
-
 
     if not article_dicts and active_outlets:
         st.warning(
@@ -1926,15 +1619,8 @@ if scan_clicked:
         pre_dedup_count = len(article_dicts)
 
         with st.spinner("Deduplicating stories across sources..."):
-            article_dicts = deduplicate_all(article_dicts, api_key=api_key, debug_mode=debug_mode)
+            article_dicts = deduplicate_all(article_dicts, api_key=api_key)
         post_dedup_count = len(article_dicts)
-
-        # ── STAGE 7-9 sidebar display (prints happen inside deduplicator.py) ─
-        if debug_mode:
-            _t = _debug_source_tally(article_dicts, "STAGE 7 — after full deduplicate_all (URL+embed+Claude)")
-            print(f"[PIPELINE DEBUG]\n{_t}")
-            st.sidebar.markdown("**[7] After deduplicate_all (URL + embed + Claude)**")
-            st.sidebar.code(_t)
 
         # Capture profile before thread starts
         _client_profile = st.session_state.get("client_profile")
@@ -1947,7 +1633,6 @@ if scan_clicked:
                 rank_result[0] = rank_articles(
                     article_dicts, state=state, district=district,
                     api_key=api_key, client_profile=_client_profile,
-                    debug_mode=debug_mode,
                 )
             except Exception as e:
                 rank_exc[0] = e
@@ -1976,13 +1661,6 @@ if scan_clicked:
             st.stop()
 
         ranked = rank_result[0] or []
-
-        # ── STAGE 8: after rank_articles (classify_political + hard filter) ──
-        if debug_mode:
-            _t = _debug_source_tally(ranked, "STAGE 8 — after rank_articles (classify_political + out-of-region filter)")
-            print(f"[PIPELINE DEBUG]\n{_t}")
-            st.sidebar.markdown("**[8] After rank_articles (classify + out-of-region filter)**")
-            st.sidebar.code(_t)
 
         scope_note = f" (state-level results for {state})" if scope == "state" else ""
 
@@ -2044,29 +1722,7 @@ if scan_clicked:
                 "_profile_boosted":        art.get("profile_boosted", False),
             })
 
-        # Debug: raw ranked output — region_tier + both score fields before row-building strips them
-        print(f"\n[RANKED RAW] {state}/{district} — {len(ranked)} political articles from rank_articles():")
-        print(f"  {'#':<3} {'tier':<10} {'acr':<5} {'final_sc':<9} {'cli_adj':<8} {'headline'[:40]}")
-        for _i, _a in enumerate(ranked, 1):
-            print(f"  {_i:<3} {_a.get('region_tier','???'):<10} "
-                  f"{'T' if _a.get('affects_client_region') else 'F':<5} "
-                  f"{_a.get('final_score',0):<9.2f} "
-                  f"{_a.get('client_adjusted_score',0):<8.2f} "
-                  f"{_a.get('headline','')[:40]}")
-
-        # Debug: show every article's region flag, score, headline, and Location from AI summary
         SHORTLIST_THRESHOLD = 7.0   # articles >= this score qualify directly; others fill via fallback
-        print(f"\n[DEBUG] Full article list after ranking/filtering — {state}/{district}  (threshold={SHORTLIST_THRESHOLD}):")
-        print(f"  {'Rk':<3} {'Score':<6} {'>=7?':<5} {'Region':<14} {'Headline':<55}  Location (from summary)")
-        for r in rows:
-            summ = r.get("Summary", "")
-            if "Location:" in summ:
-                loc_text = summ.split("Location:")[1].split("Political significance:")[0].strip()[:60]
-            else:
-                loc_text = "—"
-            region_label  = "IN-REGION " if r.get("_affects_client_region") else "OUT-OF-REGION"
-            passes_thresh = "YES" if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD else "no"
-            print(f"  {r['Rank']:<3} {r['_client_adjusted_score']:<6.2f} {passes_thresh:<5} {region_label:<14} {r['Headline'][:55]:<55}  {loc_text}")
 
         # Shortlist: articles scoring >= 7.0, OR top 10 if fewer than 5 clear the threshold.
         # Everything else stays in "not in shortlist" for the user to review and promote.
@@ -2077,23 +1733,7 @@ if scan_clicked:
             _shortlist = _above
         st.session_state.shortlist_articles = _shortlist
 
-        print(f"\n[DEBUG] Shortlist build:")
-        print(f"  Total rows:             {len(rows)}")
-        print(f"  Articles >= {SHORTLIST_THRESHOLD}:       {len(_above)}")
-        print(f"  Final shortlist size:   {len(_shortlist)}")
-        for r in _shortlist:
-            marker = "* " if r.get("_client_adjusted_score", 0) >= SHORTLIST_THRESHOLD else "  "
-            print(f"  {marker}score={r.get('_client_adjusted_score',0):.2f}  {r.get('Headline','')[:70]}")
-
-        # Debug: print counts at each pipeline stage
         dupes_merged = pre_dedup_count - post_dedup_count
-        print("\n[DEBUG] Pipeline counts:")
-        print(f"  Total fetched (pre-outlet-filter): {total_fetched}  (rss_raw={rss_total_raw}, nd={nd_count})")
-        print(f"  After outlet filter (pre-dedup):   {pre_dedup_count}  (rss={rss_total}, nd={nd_count})")
-        print(f"  After deduplication:               {post_dedup_count}  ({dupes_merged} duplicates merged)")
-        print(f"  After ranking (political filter):  {len(ranked)}")
-        print(f"  Shortlist (>= {SHORTLIST_THRESHOLD} or top-10 fallback): {len(st.session_state.shortlist_articles)}")
-
         filter_note = f"  {nd_count} from NewsData.io + {rss_total} from Google RSS."
         caption = (
             f"**{len(ranked)} political articles ranked**{scope_note}.  "
