@@ -193,34 +193,16 @@ def deduplicate_by_claude(items: list, api_key: str, batch_size: int = 20) -> li
     return [result_items[i] for i in range(len(items)) if i not in absorbed]
 
 
-def deduplicate_all(items: list, api_key: str, debug_mode: bool = False) -> list:
+def deduplicate_all(items: list, api_key: str) -> list:
     """Run the full three-stage deduplication pipeline and apply source boost."""
-    from collections import Counter
-
-    def _tally(lst, label):
-        counts = Counter(a.get("source_name", "Unknown") or "Unknown" for a in lst)
-        lines = [f"{label}  [total={len(lst)}]"]
-        for src, n in sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:30]:
-            lines.append(f"  {n:4d}  {src}")
-        return "\n".join(lines)
-
     # Step 1 — URL dedup
     after_url = deduplicate_by_url(items)
-    print(f"After URL dedup   : {len(after_url)} items")
-    if debug_mode:
-        print(f"[PIPELINE DEBUG]\n{_tally(after_url, 'STAGE 4 — after deduplicate_by_url')}")
 
     # Step 2 — embedding dedup
     after_embed = deduplicate_by_embedding(after_url, threshold=0.85)
-    print(f"After embedding dedup: {len(after_embed)} items")
-    if debug_mode:
-        print(f"[PIPELINE DEBUG]\n{_tally(after_embed, 'STAGE 5 — after deduplicate_by_embedding (threshold=0.85)')}")
 
     # Step 3 — Claude dedup
     after_claude = deduplicate_by_claude(after_embed, api_key=api_key)
-    print(f"After Claude dedup: {len(after_claude)} items")
-    if debug_mode:
-        print(f"[PIPELINE DEBUG]\n{_tally(after_claude, 'STAGE 6 — after deduplicate_by_claude')}")
 
     # Step 4 — source count boost
     for item in after_claude:
