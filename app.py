@@ -1139,12 +1139,21 @@ def _show_results():
         nd_total      = bd.get("newsdata_total", 0)
         outlet_counts = bd.get("outlet_counts", {})
 
-        breakdown_line = f"**{nd_total}** from NewsData.io + **{rss_total}** from Google RSS"
+        if nd_total > 0:
+            breakdown_line = f"**{nd_total}** from NewsData.io + **{rss_total}** from Google RSS"
+        else:
+            breakdown_line = f"**{rss_total}** from Google RSS"
         top_outlets = sorted(outlet_counts.items(), key=lambda x: -x[1])[:8]
         outlet_str  = "   ".join(f"**{k}:** {v}" for k, v in top_outlets)
         if outlet_str:
             breakdown_line += "   \u2014   " + outlet_str
         st.caption(breakdown_line)
+
+    if "funnel_counts" in st.session_state:
+        fc = st.session_state.funnel_counts
+        st.caption(
+            f"{fc['post_dedup']} after dedup \u2192 {fc['political']} political \u2192 {fc['shortlist']} in shortlist"
+        )
 
     all_rows        = st.session_state.results_rows
     total_political = len(all_rows)
@@ -1392,28 +1401,6 @@ with st.sidebar:
                     for src in chosen.get("_sources_list", []):
                         st.markdown(f"- {src}")
 
-        st.divider()
-        with st.expander("Diagnostics (NewsData.io)"):
-            _log_path = os.path.join(os.path.dirname(__file__), "newsdata_debug.log")
-            try:
-                with open(_log_path, "r", encoding="utf-8", errors="replace") as _lf:
-                    _log_lines = _lf.readlines()
-                _recent_lines = _log_lines[-20:] if _log_lines else []
-                # If any recent log line indicates an API error, show a clean
-                # user-facing message rather than leaking raw tracebacks into the UI.
-                _has_error = any(
-                    ("EXCEPTION" in ln or "Traceback" in ln or "ERROR" in ln)
-                    for ln in _recent_lines
-                )
-                if _has_error:
-                    st.warning("NewsData.io unavailable — check server logs for details.")
-                else:
-                    _last20 = "".join(_recent_lines) if _recent_lines else "(log file is empty)"
-                    st.text_area("Last 20 log lines", value=_last20, height=300, label_visibility="collapsed")
-            except FileNotFoundError:
-                st.caption("(newsdata_debug.log not found — no NewsData.io call has been made yet)")
-            except Exception as _le:
-                st.caption(f"(could not read log: {_le})")
 
 
 # ---------------------------------------------------------------------------
@@ -1423,7 +1410,8 @@ with st.sidebar:
 if scan_clicked:
     # Clear previous results so a fresh scan always re-runs fully
     for key in ("results_rows", "results_caption", "pdf_buffer", "pdf_filename",
-                "source_breakdown", "shortlist_articles", "show_all_articles"):
+                "source_breakdown", "shortlist_articles", "show_all_articles",
+                "funnel_counts"):
         st.session_state.pop(key, None)
 
     api_key      = os.getenv("ANTHROPIC_API_KEY", "")
@@ -1759,9 +1747,18 @@ if scan_clicked:
         else:
             _shortlist = _above
         st.session_state.shortlist_articles = _shortlist
+        st.session_state.funnel_counts = {
+            "post_dedup": post_dedup_count,
+            "political":  len(ranked),
+            "shortlist":  len(_shortlist),
+        }
 
         dupes_merged = pre_dedup_count - post_dedup_count
-        filter_note = f"  {nd_count} from NewsData.io + {rss_total} from Google RSS."
+        filter_note = (
+            f"  {nd_count} from NewsData.io + {rss_total} from Google RSS."
+            if nd_count > 0 else
+            f"  {rss_total} from Google RSS."
+        )
         caption = (
             f"**{len(ranked)} political articles ranked**{scope_note}.  "
             f"{dupes_merged} duplicates merged from {pre_dedup_count} candidates.{filter_note}"
