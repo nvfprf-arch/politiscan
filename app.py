@@ -1398,12 +1398,22 @@ with st.sidebar:
             try:
                 with open(_log_path, "r", encoding="utf-8", errors="replace") as _lf:
                     _log_lines = _lf.readlines()
-                _last20 = "".join(_log_lines[-20:]) if _log_lines else "(log file is empty)"
+                _recent_lines = _log_lines[-20:] if _log_lines else []
+                # If any recent log line indicates an API error, show a clean
+                # user-facing message rather than leaking raw tracebacks into the UI.
+                _has_error = any(
+                    ("EXCEPTION" in ln or "Traceback" in ln or "ERROR" in ln)
+                    for ln in _recent_lines
+                )
+                if _has_error:
+                    st.warning("NewsData.io unavailable — check server logs for details.")
+                else:
+                    _last20 = "".join(_recent_lines) if _recent_lines else "(log file is empty)"
+                    st.text_area("Last 20 log lines", value=_last20, height=300, label_visibility="collapsed")
             except FileNotFoundError:
-                _last20 = "(newsdata_debug.log not found — no NewsData.io call has been made yet)"
+                st.caption("(newsdata_debug.log not found — no NewsData.io call has been made yet)")
             except Exception as _le:
-                _last20 = f"(could not read log: {_le})"
-            st.text_area("Last 20 log lines", value=_last20, height=300, label_visibility="collapsed")
+                st.caption(f"(could not read log: {_le})")
 
 
 # ---------------------------------------------------------------------------
@@ -1552,8 +1562,25 @@ if scan_clicked:
     # source tags like "Vijaya Karnataka - vijaykarnataka.com" match correctly.
     if active_outlets:
 
+        # Pre-compute normalized outlet names and domains once for efficiency.
+        _outlet_name_norms = {
+            outlet_name: normalize_source(outlet_name)
+            for outlet_name in _active_outlet_domains
+        }
+
         def _rss_matches_outlet(art):
-            src_norm = normalize_source(art.get("source_name") or "")
+            src_raw  = art.get("source_name") or ""
+            src_norm = normalize_source(src_raw)
+
+            # Fast path: exact case-insensitive name match.
+            # Handles native RSS feed entries whose source_name is set directly
+            # to the canonical outlet name via _forced_source at fetch time
+            # (e.g. "Udayavani", "Prajavani", "Vijaya Karnataka").
+            src_lower = src_raw.strip().lower()
+            for outlet_name in _active_outlet_domains:
+                if src_lower == outlet_name.lower():
+                    return True
+
             try:
                 url_host_norm = normalize_source(
                     urllib.parse.urlparse(art.get("url") or "").netloc
@@ -1562,18 +1589,18 @@ if scan_clicked:
                 url_host_norm = ""
 
             for outlet_name, domain in _active_outlet_domains.items():
-                name_norm = normalize_source(outlet_name)
+                name_norm = _outlet_name_norms[outlet_name]
 
-                # Exact normalized name match, or with leading "The " prefix
+                # Normalized name match, or with leading "The " prefix
                 if src_norm == name_norm or src_norm == "the " + name_norm:
                     return True
 
-                # Outlet name appears as substring in source
-                # (handles "Vijaya Karnataka - vijaykarnataka.com" source tags)
+                # Outlet name appears as substring in source tag
+                # (handles "Vijaya Karnataka - vijaykarnataka.com")
                 if name_norm and name_norm in src_norm:
                     return True
 
-                # URL host matches outlet domain exactly (works for non-redirect URLs)
+                # URL host matches outlet domain exactly
                 if domain and url_host_norm == domain:
                     return True
 
