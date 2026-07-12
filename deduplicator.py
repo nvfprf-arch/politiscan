@@ -30,17 +30,40 @@ def deduplicate_by_url(items: list) -> list:
     return result
 
 
+def _is_embeddable_headline(headline: str) -> bool:
+    """True if a headline is predominantly Latin-script.
+
+    The sentence-embedding model (all-MiniLM-L6-v2) is English-centric: it maps
+    regional-language (e.g. Kannada) text to near-identical vectors, so every
+    Kannada headline looks like a duplicate of every other and unrelated stories
+    collapse into a single cluster.  Those headlines must be excluded from
+    embedding-based clustering; they are still deduplicated by URL (Step 1) and
+    by Claude (Step 3, which reads any Indian language natively).
+    """
+    letters = [c for c in headline if c.isalpha()]
+    if not letters:
+        return False
+    ascii_letters = sum(1 for c in letters if c.isascii())
+    return ascii_letters / len(letters) >= 0.5
+
+
 def deduplicate_by_embedding(items: list, threshold: float = 0.85) -> list:
     """Cluster articles by semantic similarity of their headlines.
 
     Within each cluster keep the item with the highest final_score (or the
     first item if scores are equal).  Merge all source_name values from the
     cluster onto the kept item as sources_list and set source_count.
+
+    Only Latin-script headlines participate in clustering — regional-language
+    headlines (e.g. native Kannada feeds) are passed through untouched because
+    the English embedding model cannot distinguish them (see
+    _is_embeddable_headline).
     """
     if not items:
         return []
 
     headlines = [item.get("headline", "") for item in items]
+    embeddable = [_is_embeddable_headline(h) for h in headlines]
     embeddings = model.encode(headlines, convert_to_tensor=True)
     sim_matrix = util.cos_sim(embeddings, embeddings)
 
@@ -48,10 +71,10 @@ def deduplicate_by_embedding(items: list, threshold: float = 0.85) -> list:
     duplicate_of = {}   # j -> i  (j is a duplicate of cluster i)
 
     for i in range(n):
-        if i in duplicate_of:
+        if i in duplicate_of or not embeddable[i]:
             continue
         for j in range(i + 1, n):
-            if j in duplicate_of:
+            if j in duplicate_of or not embeddable[j]:
                 continue
             if sim_matrix[i][j].item() > threshold:
                 duplicate_of[j] = i
