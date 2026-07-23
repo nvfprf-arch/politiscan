@@ -1262,34 +1262,67 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            # Full text always visible (wrapped, no truncation) via HTML table,
-            # matching the AI Shortlist above.
-            _render_article_table(non_shortlist)
+            # Rebuilt from st.data_editor to a per-row st.columns() layout so
+            # Headline and Summary always show full, wrapped text (no cell
+            # truncation / double-click-to-expand). Keeps the checkbox-per-row
+            # behaviour and the same columns as before.
+            _cols_spec = [0.55, 0.5, 0.6, 1.2, 3.2, 3.6, 1.4]  # Add, Rank, Score, Type, Headline, Summary, Sources
+            _headers   = ["Add?", "Rank", "Score", "Report Type", "Headline", "Summary", "Sources"]
 
-            # HTML tables can't host interactive checkboxes, so articles are
-            # promoted to the shortlist by picking them (rank + headline) here.
-            def _opt_label(i, row):
-                hl = (row.get("Headline") or "").strip()
-                if len(hl) > 90:
-                    hl = hl[:90] + "\u2026"
-                return f"#{row.get('Rank', i + 1)} \u2014 {hl}"
+            def _strip_prefix(v):
+                if isinstance(v, str) and v.startswith("What happened: "):
+                    return v[len("What happened: "):]
+                return v
 
-            options       = [_opt_label(i, r) for i, r in enumerate(non_shortlist)]
-            label_to_idx  = {lbl: i for i, lbl in enumerate(options)}
+            def _safe_str(v):
+                """Coerce any value to a plain str, flattening lists/sets."""
+                if v is None:
+                    return ""
+                if isinstance(v, (list, tuple)):
+                    return ", ".join(str(i) for i in v)
+                if isinstance(v, set):
+                    return ", ".join(str(i) for i in sorted(v))
+                return str(v)
 
-            selected_labels = st.multiselect(
-                "Select articles to add to your shortlist",
-                options=options,
-                key="all_articles_add_select",
-            )
+            def _esc(v):
+                return str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            _row_td = "padding:6px 10px;vertical-align:top;font-size:13px;border-bottom:1px solid #333;"
+
+            # Header row (matches the AI Shortlist table's header styling).
+            _hdr = st.columns(_cols_spec)
+            for _c, _name in zip(_hdr, _headers):
+                _c.markdown(
+                    f"<div style='background:#2a2a2a;padding:6px 10px;border-bottom:1px solid #444;"
+                    f"color:#FFFFFF;font-size:13px;font-weight:700;white-space:nowrap;'>{_name}</div>",
+                    unsafe_allow_html=True,
+                )
+
+            # Data rows
+            for i, row in enumerate(non_shortlist):
+                cols = st.columns(_cols_spec)
+                cols[0].checkbox("Add", key=f"all_add_{i}", label_visibility="collapsed")
+
+                try:
+                    score_str = f"{float(row.get('Score') or 0):.1f}"
+                except (TypeError, ValueError):
+                    score_str = _safe_str(row.get("Score"))
+                rtype    = _safe_str(row.get("Report Type"))
+                badge    = _BADGE_CSS.get(rtype, "")
+                rtype_html = f"<span style='{badge}'>{_esc(rtype)}</span>" if rtype else ""
+
+                cols[1].markdown(f"<div style='{_row_td}'>{_esc(row.get('Rank', i + 1))}</div>", unsafe_allow_html=True)
+                cols[2].markdown(f"<div style='{_row_td}'>{score_str}</div>", unsafe_allow_html=True)
+                cols[3].markdown(f"<div style='{_row_td}'>{rtype_html}</div>", unsafe_allow_html=True)
+                cols[4].markdown(f"<div style='{_row_td}'>{_esc(_safe_str(row.get('Headline')))}</div>", unsafe_allow_html=True)
+                cols[5].markdown(f"<div style='{_row_td}'>{_esc(_safe_str(_strip_prefix(row.get('Summary') or '')))}</div>", unsafe_allow_html=True)
+                cols[6].markdown(f"<div style='{_row_td}'>{_esc(_safe_str(row.get('Sources')))}</div>", unsafe_allow_html=True)
 
             if st.button("Add to Shortlist", key="add_shortlist_btn"):
                 count = 0
-                for lbl in selected_labels:
-                    idx = label_to_idx.get(lbl)
-                    if idx is None or idx >= len(non_shortlist):
+                for i, row in enumerate(non_shortlist):
+                    if not st.session_state.get(f"all_add_{i}", False):
                         continue
-                    row = non_shortlist[idx]
                     article = {
                         "url":          row.get("Link", ""),
                         "headline":     row.get("Headline", ""),
