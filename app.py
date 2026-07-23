@@ -1180,8 +1180,6 @@ def _render_article_table(rows: list, table_class: str = "") -> None:
 
 def _show_results():
     """Render AI Shortlist section, Read All section, and Export to PDF."""
-    import pandas as pd
-
     st.info(st.session_state.results_caption)
 
     # Source breakdown
@@ -1264,79 +1262,46 @@ def _show_results():
     if st.session_state.get("show_all_articles", False):
         st.subheader("All Scanned Articles \u2014 not in shortlist")
         if non_shortlist:
-            _editor_cols = ["Rank", "Score", "Report Type", "Headline", "Summary", "Sources"]
+            # Full text always visible (wrapped, no truncation) via HTML table,
+            # matching the AI Shortlist above.
+            _render_article_table(non_shortlist)
 
-            def _strip_prefix(v):
-                if isinstance(v, str) and v.startswith("What happened: "):
-                    return v[len("What happened: "):]
-                return v
+            # HTML tables can't host interactive checkboxes, so articles are
+            # promoted to the shortlist by picking them (rank + headline) here.
+            def _opt_label(i, row):
+                hl = (row.get("Headline") or "").strip()
+                if len(hl) > 90:
+                    hl = hl[:90] + "\u2026"
+                return f"#{row.get('Rank', i + 1)} \u2014 {hl}"
 
-            def _safe_str(v):
-                """Coerce any value to a plain str, flattening lists/sets."""
-                if v is None:
-                    return ""
-                if isinstance(v, (list, tuple)):
-                    return ", ".join(str(i) for i in v)
-                if isinstance(v, set):
-                    return ", ".join(str(i) for i in sorted(v))
-                return str(v)
+            options       = [_opt_label(i, r) for i, r in enumerate(non_shortlist)]
+            label_to_idx  = {lbl: i for i, lbl in enumerate(options)}
 
-            editor_rows = [
-                {
-                    "Add?":        False,
-                    "Rank":        int(row.get("Rank") or 0),
-                    "Score":       float(row.get("Score") or 0.0),
-                    "Report Type": _safe_str(row.get("Report Type")),
-                    "Headline":    _safe_str(row.get("Headline")),
-                    "Summary":     _safe_str(_strip_prefix(row.get("Summary") or "")),
-                    "Sources":     _safe_str(row.get("Sources")),
-                }
-                for row in non_shortlist
-            ]
-            edit_df = pd.DataFrame(editor_rows)[["Add?"] + _editor_cols]
-
-            try:
-                edited = st.data_editor(
-                    edit_df,
-                    hide_index=True,
-                    use_container_width=True,
-                    column_config={
-                        "Add?":        st.column_config.CheckboxColumn("Add?", default=False),
-                        "Score":       st.column_config.NumberColumn("Score", format="%.1f"),
-                        "Headline":    st.column_config.TextColumn("Headline", width="large"),
-                        "Summary":     st.column_config.TextColumn("Summary",  width="large"),
-                    },
-                    key="all_articles_editor",
-                )
-            except Exception:
-                # Fallback: render each article as an expander card
-                edited = edit_df.copy()
-                for i, row in enumerate(non_shortlist):
-                    label = _safe_str(row.get("Headline")) or f"Article {i + 1}"
-                    with st.expander(label):
-                        st.caption(f"Score: {float(row.get('Score') or 0):.1f}  |  {_safe_str(row.get('Report Type'))}  |  {_safe_str(row.get('Sources'))}")
-                        st.write(_safe_str(_strip_prefix(row.get("Summary") or "")))
-                        checked = st.checkbox("Add to Shortlist", key=f"fallback_add_{i}")
-                        edited.at[i, "Add?"] = checked
+            selected_labels = st.multiselect(
+                "Select articles to add to your shortlist",
+                options=options,
+                key="all_articles_add_select",
+            )
 
             if st.button("Add to Shortlist", key="add_shortlist_btn"):
-                selected_indices = edited.loc[edited["Add?"] == True].index.tolist()
                 count = 0
-                for idx in selected_indices:
-                    if idx < len(non_shortlist):
-                        row = non_shortlist[idx]
-                        article = {
-                            "url":          row.get("Link", ""),
-                            "headline":     row.get("Headline", ""),
-                            "primary_tag":  row.get("Tag", ""),
-                            "final_score":  row.get("Score", 0),
-                            "source_name":  row.get("Sources", ""),
-                            "affects_client_region": False,
-                        }
-                        record_promotion(st.session_state.user_email, article)
-                        if row not in st.session_state.shortlist_articles:
-                            st.session_state.shortlist_articles.append(row)
-                        count += 1
+                for lbl in selected_labels:
+                    idx = label_to_idx.get(lbl)
+                    if idx is None or idx >= len(non_shortlist):
+                        continue
+                    row = non_shortlist[idx]
+                    article = {
+                        "url":          row.get("Link", ""),
+                        "headline":     row.get("Headline", ""),
+                        "primary_tag":  row.get("Tag", ""),
+                        "final_score":  row.get("Score", 0),
+                        "source_name":  row.get("Sources", ""),
+                        "affects_client_region": False,
+                    }
+                    record_promotion(st.session_state.user_email, article)
+                    if row not in st.session_state.shortlist_articles:
+                        st.session_state.shortlist_articles.append(row)
+                    count += 1
                 if count > 0:
                     st.success(f"{count} article{'s' if count != 1 else ''} added to your shortlist.")
                     st.rerun()
