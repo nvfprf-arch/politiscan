@@ -372,6 +372,11 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
     meta = st.session_state["yt_summary"]
     results = st.session_state["yt_results"]
 
+    # Reserve the top slot for the blue summary box so it renders FIRST,
+    # above the filter row; it is filled in after filtering (below) because
+    # its text can include the live keyword-filtered count.
+    _summary_box = st.empty()
+
     # ── Filters (relocated from the sidebar) — horizontally above the table ──
     _rt_all      = "All Report Types"
     _rt_options  = [_rt_all, "CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
@@ -479,8 +484,9 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             f" &nbsp;|&nbsp; **Filtered to:** {len(display_results)} "
             f"matching `{_kw}`"
         )
-    # Blue summary box (matches the App page's st.info styling).
-    st.info(stats_md)
+    # Blue summary box (matches the App page's st.info styling), rendered into
+    # the top slot reserved above the filter row.
+    _summary_box.info(stats_md)
 
     if not display_results:
         st.info("No results match the current filters.")
@@ -505,122 +511,141 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
 
         _render_yt_table(rows)
 
-    # ── PDF Report ────────────────────────────────────────────────────────────
+    # ── Export to PDF ───────────────────────────────────────────────────────
+    # Single button that generates and offers the PDF directly (matches the
+    # App page), rather than a separate "generate" step plus a download button.
     st.divider()
-    if st.button("Generate PDF Report"):
-        from fpdf import FPDF
 
-        def _safe(text):
-            return "".join(c if ord(c) < 256 else "?" for c in str(text))
+    from fpdf import FPDF
 
-        class PolitiScanPDF(FPDF):
-            def footer(self):
-                self.set_y(-15)
-                self.set_font("Helvetica", "I", 8)
-                self.set_text_color(128, 128, 128)
-                self.cell(0, 10, "Confidential - For Internal Use Only", align="C")
+    _FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
 
-        pdf = PolitiScanPDF()
-        pdf.set_auto_page_break(auto=True, margin=20)
-        pdf.add_page()
+    def _safe(text):
+        return "".join(c if ord(c) < 256 else "?" for c in str(text))
 
-        ch_str = _safe(", ".join(meta["selected_channels"])) if meta.get("selected_channels") else "All"
+    class PolitiScanPDF(FPDF):
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("Helvetica", "I", 8)
+            self.set_text_color(128, 128, 128)
+            self.cell(0, 10, "Confidential - For Internal Use Only", align="C")
 
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, "PolitiScan YouTube Intelligence Report", ln=True, align="C")
-        pdf.set_font("Helvetica", "", 10)
-        pdf.cell(0, 6, f"Language: {meta['language']}  |  Channels: {ch_str}", ln=True, align="C")
-        pdf.cell(
-            0, 6,
-            f"Time Period: {meta['time_period']}  |  "
-            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} UTC",
-            ln=True, align="C",
-        )
-        pdf.ln(6)
+    pdf = PolitiScanPDF()
+    pdf.set_auto_page_break(auto=True, margin=20)
 
-        pdf.set_fill_color(230, 230, 230)
+    # Register a Unicode font so Kannada / regional-language titles and
+    # summaries render correctly instead of "?" (Helvetica is Latin-1 only).
+    # Falls back to Helvetica if the bundled font files are missing.
+    _uni_ok = False
+    try:
+        pdf.add_font("NotoKannada", "",  os.path.join(_FONT_DIR, "NotoSansKannada-Regular.ttf"))
+        pdf.add_font("NotoKannada", "B", os.path.join(_FONT_DIR, "NotoSansKannada-Bold.ttf"))
+        _uni_ok = True
+    except Exception:
+        _uni_ok = False
+
+    def _uni(text):
+        return (text or "") if _uni_ok else _safe(text)
+
+    _uni_fam = "NotoKannada" if _uni_ok else "Helvetica"
+
+    pdf.add_page()
+
+    ch_str = _safe(", ".join(meta["selected_channels"])) if meta.get("selected_channels") else "All"
+
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "PolitiScan YouTube Intelligence Report", ln=True, align="C")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"Language: {meta['language']}  |  Channels: {ch_str}", ln=True, align="C")
+    pdf.cell(
+        0, 6,
+        f"Time Period: {meta['time_period']}  |  "
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')} UTC",
+        ln=True, align="C",
+    )
+    pdf.ln(6)
+
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 8, "Scan Summary", ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(
+        0, 6,
+        f"Total Fetched: {meta['total_fetched']}   |   "
+        f"Non-political Removed: {meta['non_political_removed']}   |   "
+        f"Ranked: {meta['political_ranked']}",
+        ln=True,
+    )
+    pdf.ln(6)
+
+    for rank_idx, v in enumerate(display_results, 1):
+        score = round(v.get("final_score", 0), 2)
+        evs = v.get("engagement_velocity_score", 0)
+        tag = _safe(v.get("primary_tag", ""))
+        upload_time = v.get("published_at", "")[:16].replace("T", " ")
+        vph = int(v.get("views_per_hour", 0))
+        url = v.get("youtube_url", "")
+        t_status = v.get("transcript_status", "")
+        report_type = v.get("report_type", "CONFIRMED")
+        trending_label = "  [VIRAL]" if evs > 7 else "  [RISING]" if evs >= 5 else "  [ACTIVE]" if evs >= 3 else ""
+
+        pdf.set_fill_color(235, 235, 245)
+        pdf.set_draw_color(180, 180, 180)
+        pdf.set_line_width(0.3)
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, "Scan Summary", ln=True, fill=True)
-        pdf.set_font("Helvetica", "", 10)
         pdf.cell(
-            0, 6,
-            f"Total Fetched: {meta['total_fetched']}   |   "
-            f"Non-political Removed: {meta['non_political_removed']}   |   "
-            f"Ranked: {meta['political_ranked']}",
-            ln=True,
+            0, 7,
+            f"#{rank_idx}   Score: {score}   [{tag}]{trending_label}",
+            ln=True, fill=True, border="TLR",
         )
-        pdf.ln(6)
 
-        for rank_idx, v in enumerate(display_results, 1):
-            score = round(v.get("final_score", 0), 2)
-            evs = v.get("engagement_velocity_score", 0)
-            tag = _safe(v.get("primary_tag", ""))
-            title = _safe(v.get("title", ""))
-            channel = _safe(v.get("channel_name", ""))
-            upload_time = v.get("published_at", "")[:16].replace("T", " ")
-            vph = int(v.get("views_per_hour", 0))
-            summary_text = _safe(v.get("summary", ""))
-            url = v.get("youtube_url", "")
-            t_status = v.get("transcript_status", "")
-            report_type = v.get("report_type", "CONFIRMED")
-            trending_label = "  [VIRAL]" if evs > 7 else "  [RISING]" if evs >= 5 else "  [ACTIVE]" if evs >= 3 else ""
+        pdf.set_font(_uni_fam, "B", 10)
+        pdf.multi_cell(0, 6, f"{_uni(v.get('title', ''))}  [{report_type}]", border="LR")
 
-            pdf.set_fill_color(235, 235, 245)
-            pdf.set_draw_color(180, 180, 180)
-            pdf.set_line_width(0.3)
-            pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(
-                0, 7,
-                f"#{rank_idx}   Score: {score}   [{tag}]{trending_label}",
-                ln=True, fill=True, border="TLR",
-            )
-
-            pdf.set_font("Helvetica", "B", 10)
-            pdf.multi_cell(0, 6, f"{title}  [{report_type}]", border="LR")
-
-            if report_type == "SPECULATIVE":
-                signals = v.get("speculation_signals", [])
-                if signals:
-                    pdf.set_font("Helvetica", "I", 8)
-                    pdf.cell(
-                        0, 5,
-                        _safe(f"    Signals: {_truncate_signals(signals)}"),
-                        ln=True, border="LR",
-                    )
-
-            pdf.set_font("Helvetica", "I", 9)
-            pdf.cell(
-                0, 6,
-                f"{channel}  |  Uploaded: {upload_time}  |  Views/hr: {vph:,}",
-                ln=True, border="LR",
-            )
-
-            pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, summary_text, border="LR")
-
-            if t_status == "Title Only":
+        if report_type == "SPECULATIVE":
+            signals = v.get("speculation_signals", [])
+            if signals:
                 pdf.set_font("Helvetica", "I", 8)
-                pdf.set_fill_color(255, 245, 200)
                 pdf.cell(
                     0, 5,
-                    "  Note: Transcript unavailable - summary based on title only.",
-                    ln=True, fill=True, border="LR",
+                    _safe(f"    Signals: {_truncate_signals(signals)}"),
+                    ln=True, border="LR",
                 )
-                pdf.set_fill_color(235, 235, 245)
 
-            pdf.set_font("Helvetica", "U", 8)
-            pdf.set_text_color(0, 0, 200)
-            pdf.cell(0, 6, url, ln=True, border="LRB")
-            pdf.set_text_color(0, 0, 0)
-            pdf.ln(4)
-
-        pdf_bytes = bytes(pdf.output())
-        st.download_button(
-            label="Download PDF",
-            data=pdf_bytes,
-            file_name=f"politiscan_youtube_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-            mime="application/pdf",
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.cell(
+            0, 6,
+            f"{_safe(v.get('channel_name', ''))}  |  Uploaded: {upload_time}  |  Views/hr: {vph:,}",
+            ln=True, border="LR",
         )
+
+        pdf.set_font(_uni_fam, "", 9)
+        pdf.multi_cell(0, 5, _uni(v.get("summary", "")), border="LR")
+
+        if t_status == "Title Only":
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.set_fill_color(255, 245, 200)
+            pdf.cell(
+                0, 5,
+                "  Note: Transcript unavailable - summary based on title only.",
+                ln=True, fill=True, border="LR",
+            )
+            pdf.set_fill_color(235, 235, 245)
+
+        pdf.set_font("Helvetica", "U", 8)
+        pdf.set_text_color(0, 0, 200)
+        pdf.cell(0, 6, url, ln=True, border="LRB")
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(4)
+
+    pdf_bytes = bytes(pdf.output())
+    st.download_button(
+        label="Export to PDF",
+        data=pdf_bytes,
+        file_name=f"politiscan_youtube_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+        mime="application/pdf",
+        type="secondary",
+    )
 
 elif "yt_results" in st.session_state and len(st.session_state["yt_results"]) == 0:
     st.warning("No political videos found. Try a longer time period or different channels.")
