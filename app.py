@@ -1287,20 +1287,34 @@ def _show_results():
             def _esc(v):
                 return str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-            _row_td = "padding:6px 10px;vertical-align:top;font-size:13px;border-bottom:1px solid #333;"
+            def _row_columns(spec):
+                # Top-align every cell so short columns (Add?/Rank/Score/Type)
+                # line up with the top of wrapped Headline/Summary text.
+                try:
+                    return st.columns(spec, vertical_alignment="top")
+                except TypeError:  # older Streamlit without vertical_alignment
+                    return st.columns(spec)
+
+            # Full-width row separator (spans all columns at one y-position),
+            # rendered outside the columns so it isn't drawn per-cell at
+            # differing heights.
+            _row_rule = "<hr style='margin:0;border:none;border-top:1px solid #333;'>"
+
+            _row_td = "padding:6px 10px;font-size:13px;"
 
             # Header row (matches the AI Shortlist table's header styling).
-            _hdr = st.columns(_cols_spec)
+            _hdr = _row_columns(_cols_spec)
             for _c, _name in zip(_hdr, _headers):
                 _c.markdown(
-                    f"<div style='background:#2a2a2a;padding:6px 10px;border-bottom:1px solid #444;"
+                    f"<div style='background:#2a2a2a;padding:6px 10px;"
                     f"color:#FFFFFF;font-size:13px;font-weight:700;white-space:nowrap;'>{_name}</div>",
                     unsafe_allow_html=True,
                 )
+            st.markdown("<hr style='margin:0;border:none;border-top:1px solid #444;'>", unsafe_allow_html=True)
 
             # Data rows
             for i, row in enumerate(non_shortlist):
-                cols = st.columns(_cols_spec)
+                cols = _row_columns(_cols_spec)
                 cols[0].checkbox("Add", key=f"all_add_{i}", label_visibility="collapsed")
 
                 try:
@@ -1317,6 +1331,7 @@ def _show_results():
                 cols[4].markdown(f"<div style='{_row_td}'>{_esc(_safe_str(row.get('Headline')))}</div>", unsafe_allow_html=True)
                 cols[5].markdown(f"<div style='{_row_td}'>{_esc(_safe_str(_strip_prefix(row.get('Summary') or '')))}</div>", unsafe_allow_html=True)
                 cols[6].markdown(f"<div style='{_row_td}'>{_esc(_safe_str(row.get('Sources')))}</div>", unsafe_allow_html=True)
+                st.markdown(_row_rule, unsafe_allow_html=True)
 
             if st.button("Add to Shortlist", key="add_shortlist_btn"):
                 count = 0
