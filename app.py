@@ -24,6 +24,10 @@ import anthropic
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
+# Directory holding bundled Unicode TTFs (e.g. Noto Sans Kannada) so the PDF
+# can render regional-language (Kannada) text instead of "?" placeholders.
+_FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+
 from regions import REGIONS, KANNADA_DISTRICTS, STATE_REGIONAL_QUERIES
 from outlets import STATE_OUTLETS, OUTLET_DOMAINS, NATIVE_RSS_FEEDS
 from ranker import rank_articles
@@ -849,6 +853,26 @@ def generate_pdf_shortlist(articles: list, region_label: str, email: str) -> byt
     pdf = PolitiScanShortlistPDF(region_label=region_label, email=email, scan_date=scan_date)
     pdf.set_margins(left=20, top=15, right=20)
     pdf.set_auto_page_break(auto=True, margin=20)
+
+    # Register a Unicode font so Kannada / other regional-language headlines and
+    # summaries render correctly (the core Helvetica font is Latin-1 only and
+    # replaces non-Latin glyphs with "?").  Falls back to Helvetica if the
+    # bundled font files are missing.
+    uni_ok = False
+    try:
+        pdf.add_font("NotoKannada", "",  os.path.join(_FONT_DIR, "NotoSansKannada-Regular.ttf"))
+        pdf.add_font("NotoKannada", "B", os.path.join(_FONT_DIR, "NotoSansKannada-Bold.ttf"))
+        uni_ok = True
+    except Exception:
+        uni_ok = False
+
+    # For Unicode-font text pass the raw string; for the Latin-only fallback run
+    # it through safe() so encoding never raises.
+    def uni(text: str) -> str:
+        return (text or "") if uni_ok else safe(text)
+
+    uni_family = "NotoKannada" if uni_ok else "Helvetica"
+
     pdf.add_page()
 
     W = 170
@@ -878,9 +902,9 @@ def generate_pdf_shortlist(articles: list, region_label: str, email: str) -> byt
             pass
 
         try:
-            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_font(uni_family, "B", 10)
             pdf.set_x(pdf.l_margin)
-            pdf.multi_cell(w=W, h=6, text=headline, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(w=W, h=6, text=uni(art.get("Headline", "")), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         except Exception:
             pass
 
@@ -892,9 +916,9 @@ def generate_pdf_shortlist(articles: list, region_label: str, email: str) -> byt
             pass
 
         try:
-            pdf.set_font("Helvetica", "", 9)
+            pdf.set_font(uni_family, "", 9)
             pdf.set_x(pdf.l_margin)
-            pdf.multi_cell(w=W, h=5, text=summary, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(w=W, h=5, text=uni(art.get("Summary", "")), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         except Exception:
             pass
 
@@ -1182,28 +1206,43 @@ def _show_results():
     """Render AI Shortlist section, Read All section, and Export to PDF."""
     st.info(st.session_state.results_caption)
 
-    # Source breakdown
-    if "source_breakdown" in st.session_state:
-        bd = st.session_state.source_breakdown
-        rss_total     = bd.get("rss_total", 0)
-        nd_total      = bd.get("newsdata_total", 0)
-        outlet_counts = bd.get("outlet_counts", {})
-
-        if nd_total > 0:
-            breakdown_line = f"**{nd_total}** from NewsData.io + **{rss_total}** from Google RSS"
-        else:
-            breakdown_line = f"**{rss_total}** from Google RSS"
-        top_outlets = sorted(outlet_counts.items(), key=lambda x: -x[1])[:8]
-        outlet_str  = "   ".join(f"**{k}:** {v}" for k, v in top_outlets)
-        if outlet_str:
-            breakdown_line += "   \u2014   " + outlet_str
-        st.caption(breakdown_line)
-
-    if "funnel_counts" in st.session_state:
-        fc = st.session_state.funnel_counts
-        st.caption(
-            f"{fc['post_dedup']} after dedup \u2192 {fc['political']} political \u2192 {fc['shortlist']} in shortlist"
+    # Result filters + story sources (relocated from the sidebar), laid out
+    # horizontally above the AI Shortlist table.
+    _fcol1, _fcol2, _fcol3 = st.columns(3)
+    with _fcol1:
+        st.selectbox(
+            "Show Report Types",
+            options=["All Report Types", "CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
+            key="selected_report_types",
         )
+    with _fcol2:
+        keyword_input = st.text_input(
+            "Filter by Keyword",
+            placeholder="e.g. DK Shivakumar",
+        )
+        st.session_state.keyword_filter = keyword_input
+    with _fcol3:
+        with st.expander("Story Sources"):
+            _sl_src             = st.session_state.get("shortlist_articles", [])
+            shortlist_links     = {a.get("Link", "") for a in _sl_src if a.get("Link")}
+            shortlist_headlines = {a.get("Headline", "") for a in _sl_src if a.get("Headline")}
+            multi_source_rows = [
+                r for r in st.session_state.results_rows
+                if r.get("_source_count", 1) >= 2
+                and (
+                    r.get("Link", "") in shortlist_links
+                    or r.get("Headline", "") in shortlist_headlines
+                )
+            ]
+            if not multi_source_rows:
+                st.caption("No shortlisted stories with multiple sources found.")
+            else:
+                headlines = [r.get("Headline", f"Story {i+1}") for i, r in enumerate(multi_source_rows)]
+                selected_hl = st.selectbox("Select story", headlines, label_visibility="collapsed")
+                chosen = next((r for r in multi_source_rows if r.get("Headline") == selected_hl), None)
+                if chosen:
+                    for src in chosen.get("_sources_list", []):
+                        st.markdown(f"- {src}")
 
     all_rows        = st.session_state.results_rows
     total_political = len(all_rows)
@@ -1241,7 +1280,7 @@ def _show_results():
     _sl_total = len(st.session_state.get("shortlist_articles", []))
     if not shortlist and _sl_total:
         st.subheader(f"AI Shortlist (0 of {_sl_total} articles shown — hidden by 'Show Report Types' filter)")
-        st.caption("Adjust the **Show Report Types** filter in the sidebar to **All Report Types** to see results.")
+        st.caption("Adjust the **Show Report Types** filter above to **All Report Types** to see results.")
     else:
         st.subheader(f"AI Shortlist ({len(shortlist)} articles)")
         if shortlist:
@@ -1426,46 +1465,6 @@ with st.sidebar:
 
     scan_clicked = st.button("Scan News", type="primary", use_container_width=True)
     debug_mode = st.checkbox("Debug Mode", value=False, help="Show raw source names from RSS/NewsData and filter details")
-
-    # Story Sources — only shown when results are available
-    if "results_rows" in st.session_state and st.session_state.results_rows:
-        st.divider()
-        st.subheader("Filter Results")
-        st.selectbox(
-            "Show Report Types",
-            options=["All Report Types", "CONFIRMED", "SPECULATIVE", "ANALYTICAL"],
-            key="selected_report_types",
-        )
-
-        keyword = st.text_input(
-            "Filter by Keyword",
-            placeholder="e.g. DK Shivakumar",
-        )
-        st.session_state.keyword_filter = keyword
-
-        st.divider()
-        with st.expander("Story Sources"):
-            shortlist = st.session_state.get("shortlist_articles", [])
-            shortlist_links = {a.get("Link", "") for a in shortlist if a.get("Link")}
-            shortlist_headlines = {a.get("Headline", "") for a in shortlist if a.get("Headline")}
-            multi_source_rows = [
-                r for r in st.session_state.results_rows
-                if r.get("_source_count", 1) >= 2
-                and (
-                    r.get("Link", "") in shortlist_links
-                    or r.get("Headline", "") in shortlist_headlines
-                )
-            ]
-            if not multi_source_rows:
-                st.caption("No shortlisted stories with multiple sources found.")
-            else:
-                headlines = [r.get("Headline", f"Story {i+1}") for i, r in enumerate(multi_source_rows)]
-                selected_hl = st.selectbox("Select story", headlines, label_visibility="collapsed")
-                chosen = next((r for r in multi_source_rows if r.get("Headline") == selected_hl), None)
-                if chosen:
-                    for src in chosen.get("_sources_list", []):
-                        st.markdown(f"- {src}")
-
 
 
 # ---------------------------------------------------------------------------
