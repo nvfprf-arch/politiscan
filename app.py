@@ -1207,8 +1207,13 @@ def _show_results():
     st.info(st.session_state.results_caption)
 
     # Result filters + story sources (relocated from the sidebar), laid out
-    # horizontally above the AI Shortlist table.
-    _fcol1, _fcol2, _fcol3 = st.columns(3)
+    # horizontally above the AI Shortlist table. Bottom-align so the Story
+    # Sources expander lines up with the Report Types / Keyword input boxes
+    # (which are taller because of their labels).
+    try:
+        _fcol1, _fcol2, _fcol3 = st.columns(3, vertical_alignment="bottom")
+    except TypeError:  # older Streamlit without vertical_alignment
+        _fcol1, _fcol2, _fcol3 = st.columns(3)
     with _fcol1:
         st.selectbox(
             "Show Report Types",
@@ -1464,7 +1469,6 @@ with st.sidebar:
     active_outlets = [] if selected_outlets == ["All Outlets"] else [o for o in selected_outlets if o != "All Outlets"]
 
     scan_clicked = st.button("Scan News", type="primary", use_container_width=True)
-    debug_mode = st.checkbox("Debug Mode", value=False, help="Show raw source names from RSS/NewsData and filter details")
 
 
 # ---------------------------------------------------------------------------
@@ -1595,19 +1599,6 @@ if scan_clicked:
         o: (OUTLET_DOMAINS.get(o) or "").lower()
         for o in active_outlets
     }
-
-    if active_outlets and outlet_site_counts:
-        _outlet_summary = []
-        for _oname in active_outlets:
-            _counts = outlet_site_counts.get(_oname, {})
-            if "native" in _counts:
-                _outlet_summary.append(f"{_oname}: native feed  ({_counts['native']} entries)")
-            else:
-                _n = _counts.get("site_en", 0) + _counts.get("site_kn", 0)
-                _outlet_summary.append(f"{_oname}: Google site-restricted  ({_n} entries)")
-        if debug_mode and _outlet_summary:
-            st.sidebar.markdown("**Per-outlet fetch method**")
-            st.sidebar.code("\n".join(_outlet_summary))
 
     # Filter RSS results by selected outlets using normalized domain/name matching.
     # normalize_source() strips protocol, www., and '- Google News' suffixes so that
@@ -1827,16 +1818,11 @@ if scan_clicked:
             "shortlist":  len(_shortlist),
         }
 
-        dupes_merged = pre_dedup_count - post_dedup_count
-        filter_note = (
-            f"  {nd_count} from NewsData.io + {rss_total} from Google RSS."
-            if nd_count > 0 else
-            f"  {rss_total} from Google RSS."
-        )
-        caption = (
-            f"**{len(ranked)} political articles ranked**{scope_note}.  "
-            f"{dupes_merged} duplicates merged from {pre_dedup_count} candidates.{filter_note}"
-        )
+        outlet_str = ", ".join(f"{v} from {k}" for k, v in outlet_counts.most_common())
+        caption = f"**{len(ranked)} political articles ranked**{scope_note}"
+        if outlet_str:
+            caption += f", {outlet_str}"
+        caption += "."
 
         st.session_state.results_rows    = rows
         st.session_state.results_caption = caption
