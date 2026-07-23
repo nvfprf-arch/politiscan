@@ -45,6 +45,50 @@ def _style_report_type(col):
     return col.map(lambda v: _TYPE_STYLES.get(v, ""))
 
 
+# HTML-table styling (mirrors the App page's AI Shortlist table) so Title and
+# Summary always show full, wrapped text with no truncation / double-click.
+_BADGE_CSS = {
+    "CONFIRMED":   "background:#1a472a;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
+    "SPECULATIVE": "background:#7d4e00;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
+    "ANALYTICAL":  "background:#1a3a5c;color:white;padding:2px 8px;border-radius:4px;white-space:nowrap;",
+}
+_TH = "padding:6px 10px;text-align:left;border-bottom:1px solid #444;white-space:nowrap;color:#FFFFFF !important;"
+_TD = "padding:6px 10px;vertical-align:top;"
+_YT_COLS = ["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"]
+
+
+def _render_yt_table(rows):
+    """Render ranked videos as a styled HTML table with full, wrapped text."""
+    def esc(v):
+        return str(v).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    header = "".join(f"<th style='{_TH}'>{c}</th>" for c in _YT_COLS)
+    body = ""
+    for r in rows:
+        cells = ""
+        for c in _YT_COLS:
+            val = r.get(c, "")
+            if c == "Report Type":
+                content = f"<span style='{_BADGE_CSS.get(val, '')}'>{esc(val)}</span>" if val else ""
+            elif c == "YouTube Link":
+                content = f"<a href='{esc(val)}' target='_blank' style='color:#4da6ff;'>Watch</a>" if val else ""
+            elif c == "Score":
+                content = f"{val:.2f}" if isinstance(val, (int, float)) else esc(val)
+            elif c == "Views/hr":
+                content = f"{int(val):,}" if isinstance(val, (int, float)) else esc(val)
+            else:
+                content = esc(val)
+            cells += f"<td style='{_TD}'>{content}</td>"
+        body += f"<tr>{cells}</tr>"
+    st.markdown(
+        "<div style='overflow-x:auto;'>"
+        "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+        f"<thead><tr style='background:#2a2a2a;'>{header}</tr></thead>"
+        f"<tbody>{body}</tbody></table></div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _truncate_signals(signals, max_len=80):
     if not signals:
         return ""
@@ -165,79 +209,7 @@ with st.sidebar:
         index=2,
     )
 
-    keyword = st.text_input("Filter by Keyword (optional)", key="yt_keyword")
-
     scan_button = st.button("Scan and Rank", type="primary", use_container_width=True)
-
-    report_type_filter = ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
-    relevance_filter = None
-    if "yt_results" in st.session_state and st.session_state["yt_results"]:
-        _rt_all = "All Report Types"
-        _rt_options = [_rt_all, "CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
-
-        if "yt_report_type_widget" not in st.session_state:
-            st.session_state["yt_report_type_widget"] = [_rt_all]
-            st.session_state["yt_prev_report_types"] = [_rt_all]
-
-        def _on_report_type_change():
-            current = st.session_state["yt_report_type_widget"]
-            prev = st.session_state["yt_prev_report_types"]
-            newly_added = [x for x in current if x not in prev]
-
-            if not newly_added:
-                if not current:
-                    st.session_state["yt_report_type_widget"] = [_rt_all]
-            elif _rt_all in newly_added:
-                st.session_state["yt_report_type_widget"] = [_rt_all]
-            else:
-                st.session_state["yt_report_type_widget"] = [x for x in current if x != _rt_all]
-
-            st.session_state["yt_prev_report_types"] = list(st.session_state["yt_report_type_widget"])
-
-        st.multiselect(
-            "Show Report Types",
-            _rt_options,
-            key="yt_report_type_widget",
-            on_change=_on_report_type_change,
-        )
-
-        _rt_sel = st.session_state["yt_report_type_widget"]
-        if _rt_all in _rt_sel:
-            report_type_filter = ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
-        else:
-            report_type_filter = _rt_sel
-
-        _rel_all = "All Relevance"
-        _rel_options = [_rel_all, "Viral", "Rising", "Active"]
-
-        if "yt_relevance_widget" not in st.session_state:
-            st.session_state["yt_relevance_widget"] = [_rel_all]
-            st.session_state["yt_prev_relevance"] = [_rel_all]
-
-        def _on_relevance_change():
-            current = st.session_state["yt_relevance_widget"]
-            prev = st.session_state["yt_prev_relevance"]
-            newly_added = [x for x in current if x not in prev]
-
-            if not newly_added:
-                if not current:
-                    st.session_state["yt_relevance_widget"] = [_rel_all]
-            elif _rel_all in newly_added:
-                st.session_state["yt_relevance_widget"] = [_rel_all]
-            else:
-                st.session_state["yt_relevance_widget"] = [x for x in current if x != _rel_all]
-
-            st.session_state["yt_prev_relevance"] = list(st.session_state["yt_relevance_widget"])
-
-        st.multiselect(
-            "Filter by Relevance",
-            _rel_options,
-            key="yt_relevance_widget",
-            on_change=_on_relevance_change,
-        )
-
-        _rel_sel = st.session_state["yt_relevance_widget"]
-        relevance_filter = None if _rel_all in _rel_sel else _rel_sel
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -400,6 +372,61 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
     meta = st.session_state["yt_summary"]
     results = st.session_state["yt_results"]
 
+    # ── Filters (relocated from the sidebar) — horizontally above the table ──
+    _rt_all      = "All Report Types"
+    _rt_options  = [_rt_all, "CONFIRMED", "SPECULATIVE", "ANALYTICAL"]
+    _rel_all     = "All Relevance"
+    _rel_options = [_rel_all, "Viral", "Rising", "Active"]
+
+    if "yt_report_type_widget" not in st.session_state:
+        st.session_state["yt_report_type_widget"] = [_rt_all]
+        st.session_state["yt_prev_report_types"] = [_rt_all]
+    if "yt_relevance_widget" not in st.session_state:
+        st.session_state["yt_relevance_widget"] = [_rel_all]
+        st.session_state["yt_prev_relevance"] = [_rel_all]
+
+    def _on_report_type_change():
+        current = st.session_state["yt_report_type_widget"]
+        prev = st.session_state["yt_prev_report_types"]
+        newly_added = [x for x in current if x not in prev]
+        if not newly_added:
+            if not current:
+                st.session_state["yt_report_type_widget"] = [_rt_all]
+        elif _rt_all in newly_added:
+            st.session_state["yt_report_type_widget"] = [_rt_all]
+        else:
+            st.session_state["yt_report_type_widget"] = [x for x in current if x != _rt_all]
+        st.session_state["yt_prev_report_types"] = list(st.session_state["yt_report_type_widget"])
+
+    def _on_relevance_change():
+        current = st.session_state["yt_relevance_widget"]
+        prev = st.session_state["yt_prev_relevance"]
+        newly_added = [x for x in current if x not in prev]
+        if not newly_added:
+            if not current:
+                st.session_state["yt_relevance_widget"] = [_rel_all]
+        elif _rel_all in newly_added:
+            st.session_state["yt_relevance_widget"] = [_rel_all]
+        else:
+            st.session_state["yt_relevance_widget"] = [x for x in current if x != _rel_all]
+        st.session_state["yt_prev_relevance"] = list(st.session_state["yt_relevance_widget"])
+
+    try:
+        _fcol1, _fcol2, _fcol3 = st.columns(3, vertical_alignment="bottom")
+    except TypeError:  # older Streamlit without vertical_alignment
+        _fcol1, _fcol2, _fcol3 = st.columns(3)
+    with _fcol1:
+        st.multiselect("Show Report Types", _rt_options, key="yt_report_type_widget", on_change=_on_report_type_change)
+    with _fcol2:
+        st.multiselect("Filter by Relevance", _rel_options, key="yt_relevance_widget", on_change=_on_relevance_change)
+    with _fcol3:
+        st.text_input("Filter by Keyword (optional)", key="yt_keyword")
+
+    _rt_sel = st.session_state["yt_report_type_widget"]
+    report_type_filter = ["CONFIRMED", "SPECULATIVE", "ANALYTICAL"] if _rt_all in _rt_sel else _rt_sel
+    _rel_sel = st.session_state["yt_relevance_widget"]
+    relevance_filter = None if _rel_all in _rel_sel else _rel_sel
+
     display_results = results
     if report_type_filter:
         display_results = [
@@ -452,48 +479,31 @@ if "yt_results" in st.session_state and len(st.session_state["yt_results"]) > 0:
             f" &nbsp;|&nbsp; **Filtered to:** {len(display_results)} "
             f"matching `{_kw}`"
         )
-    st.markdown(stats_md)
+    # Blue summary box (matches the App page's st.info styling).
+    st.info(stats_md)
 
     if not display_results:
         st.info("No results match the current filters.")
     else:
         rows = []
         for rank_idx, v in enumerate(display_results, 1):
+            summary_clean = re.sub(
+                r'^\*\*Summary[:\s]*\*\*\s*', '',
+                v.get("summary", "").removeprefix("## Summary").removeprefix("## "),
+            ).lstrip()
             rows.append({
-                "Rank": rank_idx,
-                "Score": round(v.get("final_score", 0), 2),
-                "Tag": v.get("primary_tag", ""),
-                "Relevance": _relevance_label(v.get("views_per_hour", 0)),
-                "Title": v.get("title", ""),
-                "Channel": v.get("channel_name", ""),
-                "Views/hr": int(v.get("views_per_hour", 0)),
-                "Upload Time": v.get("published_at", "")[:16].replace("T", " "),
-                "Summary": (lambda s: s[:300] + "..." if len(s) > 300 else s)(re.sub(r'^\*\*Summary[:\s]*\*\*\s*', '', v.get("summary", "").removeprefix("## Summary").removeprefix("## ")).lstrip()),
-                "Report Type": v.get("report_type", "CONFIRMED"),
-                "Signals": _truncate_signals(v.get("speculation_signals", [])),
+                "Rank":         rank_idx,
+                "Score":        round(float(v.get("final_score", 0)), 2),
+                "Title":        v.get("title", ""),
+                "Summary":      summary_clean,   # full text, no truncation
+                "Channel":      v.get("channel_name", ""),
+                "Report Type":  v.get("report_type", "CONFIRMED"),
+                "Relevance":    _relevance_label(v.get("views_per_hour", 0)),
+                "Views/hr":     int(v.get("views_per_hour", 0)),
                 "YouTube Link": v.get("youtube_url", ""),
             })
 
-        df = pd.DataFrame(rows)
-        df["Score"] = df["Score"].apply(lambda x: round(float(x), 2))
-
-        styled = (
-            df.style
-            .apply(_style_report_type, subset=["Report Type"])
-        )
-
-        st.dataframe(
-            styled,
-            column_config={
-                "Score": st.column_config.NumberColumn("Score", format="%.2f"),
-                "YouTube Link": st.column_config.LinkColumn("YouTube Link", display_text="Watch"),
-                "Title": st.column_config.TextColumn("Title", width="medium"),
-                "Summary": st.column_config.TextColumn("Summary", width="large"),
-            },
-            column_order=["Rank", "Score", "Title", "Summary", "Channel", "Report Type", "Relevance", "Views/hr", "YouTube Link"],
-            hide_index=True,
-            use_container_width=True,
-        )
+        _render_yt_table(rows)
 
     # ── PDF Report ────────────────────────────────────────────────────────────
     st.divider()

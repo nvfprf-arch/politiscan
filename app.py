@@ -1818,7 +1818,15 @@ if scan_clicked:
             "shortlist":  len(_shortlist),
         }
 
-        outlet_str = ", ".join(f"{v} from {k}" for k, v in outlet_counts.most_common())
+        # Per-outlet counts from the FINAL ranked/political list (each article
+        # counted once by its primary source), so the numbers are consistent
+        # with the total and never exceed it. Only outlets with >=1 article
+        # in the final list are listed.
+        final_outlet_counts = Counter(
+            a.get("source_name") for a in ranked
+            if a.get("source_name") and a.get("source_name") not in ("Unknown", "Google News", "")
+        )
+        outlet_str = ", ".join(f"{v} from {k}" for k, v in final_outlet_counts.most_common())
         caption = f"**{len(ranked)} political articles ranked**{scope_note}"
         if outlet_str:
             caption += f", {outlet_str}"
